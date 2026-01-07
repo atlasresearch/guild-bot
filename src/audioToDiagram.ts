@@ -8,6 +8,7 @@ import { exportGraphJSON, loadGraphJSON } from './exporters/rdfExporter'
 import { ensureFfmpegAvailable } from './interfaces/ffmpeg'
 import { debug, info } from './interfaces/logger'
 import { ensureWhisperAvailable, transcribeWithWhisper } from './interfaces/whisper'
+import { CHAT_DIR } from './path'
 import { generateCausalRelationships } from './workflows/cld.workflow'
 
 async function fileExists(p: string) {
@@ -161,7 +162,7 @@ function normalizeTranscript(text: string) {
 
 async function persistProgress(universe: string, id: string, msg: string) {
   try {
-    const sourceDir = path.join(os.tmpdir(), 'discord-remote-chat-bot', universe, id)
+    const sourceDir = path.join(CHAT_DIR, universe, id)
     await fsp.mkdir(sourceDir, { recursive: true })
     const out = { status: msg, updated: Date.now() }
     await fsp.writeFile(path.join(sourceDir, 'progress.json'), JSON.stringify(out, null, 2), 'utf8')
@@ -189,7 +190,7 @@ export async function audioToTranscript(
   audioURL: string,
   onProgress?: (message: string) => void | Promise<void>
 ) {
-  const folder = path.join(os.tmpdir(), 'discord-remote-chat-bot', universe)
+  const folder = path.join(CHAT_DIR, universe)
 
   await fsp.mkdir(folder, { recursive: true })
 
@@ -482,7 +483,7 @@ export async function transcriptToDiagrams(
   // a transcript string, create a temp universe/id under the OS temp dir.
   const outUniverse = universe || 'transcript'
   const outId = id || `t-${Date.now()}`
-  const folder = path.join(os.tmpdir(), 'discord-remote-chat-bot', outUniverse)
+  const folder = path.join(CHAT_DIR, outUniverse)
   const sourceDir = path.join(folder, outId)
 
   const graphJSONPath = path.join(sourceDir, `graph.json`)

@@ -16,6 +16,8 @@ export async function ensureWhisperAvailable() {
   }
 }
 
+// models/ggml-base.en.bin
+
 /**
  * Run whisper-cli to transcribe a WAV file to a TXT file.
  * - modelPath: path to ggml model

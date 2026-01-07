@@ -2,14 +2,13 @@ import {
   AgentStreamEvent,
   AgentWorkflowDefinition,
   extractJson,
-  validateWorkflowDefinition,
   runAgentWorkflow,
+  validateWorkflowDefinition,
   WorkflowParserJsonOutput,
   type AgentWorkflowResult
 } from '@hexafield/agent-workflow'
-import appRootPath from 'app-root-path'
 import fsp from 'node:fs/promises'
-import path from 'node:path'
+import { DEFAULT_MODEL, DEFAULT_SESSION_DIR } from '../path'
 
 export type ToolDef = {
   /** internal name used when selecting a tool */
@@ -40,15 +39,12 @@ export const TOOLS: ToolDef[] = [
     name: 'meeting_summarise',
     title: 'Meeting Summarise',
     callWhen:
-      'Call this when the user asks for a meeting summary, insights, action items, decisions or open questions derived from a meeting transcript or recording.',
+      'Call this when the user asks for a meeting summary, insights, action items, decisions or open questions derived from a meeting transcript or recording. Only use this if the source material is a transcript.',
     description: 'Generate meeting digest: insights, action items, decisions, open questions.'
   }
 ]
 
 export const TOOL_NAMES = TOOLS.map((t) => t.name)
-
-const DEFAULT_MODEL = process.env.TOOLS_MODEL || 'github-copilot/gpt-5-mini'
-const DEFAULT_SESSION_DIR = path.resolve(appRootPath.path, '.tmp', 'tools-sessions')
 
 async function ensureSessionDir(sessionDir = DEFAULT_SESSION_DIR) {
   await fsp.mkdir(sessionDir, { recursive: true })
