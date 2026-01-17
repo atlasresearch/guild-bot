@@ -557,10 +557,6 @@ export async function transcriptToDiagrams(
         `Using ${transcripts.length} transcript chunk(s) from ${sourceDir} for causal relationship extraction`
       )
     }
-    // const useSDB = Boolean(process.env.USE_SYSTEM_DYNAMICS_BOT)
-    // let generatedFromSDB = false
-    // if (useSDB) {
-    //   try {
     await notify(outUniverse, outId, 'Extracting causal relationships (System Dynamics Bot)…', onProgress)
     const cld = await generateCausalRelationships(transcripts, userPrompt, progress)
     if ('error' in cld) {
@@ -569,17 +565,6 @@ export async function transcriptToDiagrams(
     }
     nodes = cld.nodes
     relationships = cld.relationships
-    // generatedFromSDB = true
-    // } catch (err) {
-    //   console.warn('System-Dynamics-Bot failed; falling back to LLM-based extraction:', (err as any)?.message || err)
-    // }
-    // }
-    // if (!generatedFromSDB) {
-    //   await notify('Extracting concepts (nodes)…')
-    //   nodes = await generateNodes(transcript)
-    //   await notify('Extracting relationships between concepts…')
-    //   relationships = await generateRelationships(transcript, nodes)
-    // }
   }
 
   const kumu = toKumuJSON(nodes, relationships)

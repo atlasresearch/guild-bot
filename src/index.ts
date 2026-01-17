@@ -33,7 +33,8 @@ import {
   formatAttachmentsForPrompt,
   getAskQuestionContext,
   rememberAskQuestionContext,
-  saveMessageAttachments
+  saveMessageAttachments,
+  UNIVERSE
 } from './askQuestion'
 import { audioToTranscript, transcriptToDiagrams } from './audioToDiagram'
 import { CHAT_DIR } from './path'
@@ -310,9 +311,9 @@ export async function handleInteraction(interaction: Interaction) {
         }
       }
 
-      const id = await audioToTranscript('discord', url, onProgress)
+      const id = await audioToTranscript(UNIVERSE, url, onProgress)
       const { kumuPath, pngPath } = await transcriptToDiagrams(
-        'discord',
+        UNIVERSE,
         id,
         undefined,
         userPrompt,
@@ -642,7 +643,8 @@ export async function handleMessage(message: Message) {
         // Logic for audioToDiagram (which uses a URL/path)
         const targetUrl = attachment?.url ?? message.content.match(/https?:\/\/\S+/)?.[0]
         // Fallback to referenced?
-        const refUrl = referencedMessage?.attachments.first()?.url ?? referencedMessage?.content.match(/https?:\/\/\S+/)?.[0]
+        const refUrl =
+          referencedMessage?.attachments.first()?.url ?? referencedMessage?.content.match(/https?:\/\/\S+/)?.[0]
 
         const validUrl = targetUrl || refUrl
 
@@ -653,10 +655,9 @@ export async function handleMessage(message: Message) {
 
         await reply.edit('Generating diagram from the provided audio…')
         // We use the URL because audioToDiagram likely handles downloading/caching separately or supports URLs
-        // (audioToTranscript('discord', ...))
         console.log('diagram tool using URL:', validUrl, contextParts)
-        const id = await audioToTranscript('discord', validUrl, onProgress)
-        const out = await transcriptToDiagrams('discord', id, fullContext, question, onProgress, false)
+        const id = await audioToTranscript(UNIVERSE, validUrl, onProgress)
+        const out = await transcriptToDiagrams(UNIVERSE, id, fullContext, question, onProgress, false)
         const diagramData = await fs.readFile(out.kumuPath, 'utf-8')
         const pngData = await fs.readFile(out.pngPath)
         await reply.edit({
@@ -683,8 +684,8 @@ export async function handleMessage(message: Message) {
         }
         await reply.edit('Transcribing audio…')
         try {
-          const id = await audioToTranscript('discord', targetUrl, onProgress)
-          const vttPath = path.join(CHAT_DIR, 'discord', id, 'audio.vtt')
+          const id = await audioToTranscript(UNIVERSE, targetUrl, onProgress)
+          const vttPath = path.join(CHAT_DIR, UNIVERSE, id, 'audio.vtt')
           const vtt = await fs.readFile(vttPath, 'utf-8')
           if (vtt.length < 1900) {
             await reply.edit({ content: `Transcript:\n\n${vtt}` })

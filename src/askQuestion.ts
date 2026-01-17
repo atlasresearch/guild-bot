@@ -17,8 +17,8 @@ export type AttachmentSummary = {
 }
 
 const DEFAULT_MODEL = process.env.ASKQUESTION_MODEL || process.env.ASKVIDEO_MODEL || 'github-copilot/gpt-5-mini'
-const DEFAULT_UNIVERSE = 'discord'
-const DEFAULT_SESSION_DIR = path.resolve(appRootPath.path, '.tmp', `${DEFAULT_UNIVERSE}-sessions`)
+export const UNIVERSE = process.env.UNIVERSE || 'discord-dev'
+const DEFAULT_SESSION_DIR = path.resolve(appRootPath.path, '.tmp', `${UNIVERSE}-sessions`)
 const CONTEXT_DIR = path.join(DEFAULT_SESSION_DIR, 'context')
 
 const contextPathFor = (key: string) => path.join(CONTEXT_DIR, `${key}.json`)
@@ -180,6 +180,6 @@ export async function cloneAskQuestionContext(fromKey: string | undefined, toKey
 
 export const ASKQUESTION_CONSTANTS = {
   MODEL: DEFAULT_MODEL,
-  UNIVERSE: DEFAULT_UNIVERSE,
+  UNIVERSE: UNIVERSE,
   SESSION_DIR: DEFAULT_SESSION_DIR
 }

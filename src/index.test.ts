@@ -87,7 +87,7 @@ vi.mock('./recording/server', () => ({
 // --- Imports ---
 
 import * as AgentWorkflow from '@hexafield/agent-workflow'
-import { ASKQUESTION_CONSTANTS } from './askQuestion'
+import { ASKQUESTION_CONSTANTS, UNIVERSE } from './askQuestion'
 import * as AudioToDiagram from './audioToDiagram'
 import { handleMessage } from './index'
 import * as Tools from './workflows/tools'
@@ -272,7 +272,7 @@ describe('handleMessage Features', () => {
       expect(mockReply.edit).toHaveBeenCalledWith('Generating diagram from the provided audio…')
 
       expect(AudioToDiagram.audioToTranscript).toHaveBeenCalledWith(
-        'discord',
+        UNIVERSE,
         'http://foo/audio.mp3',
         expect.any(Function)
       )
@@ -309,7 +309,7 @@ describe('handleMessage Features', () => {
 
       const mockTranscript = 'This is the transcript text.'
       // Needs to match CHAT_DIR in path.ts which is .tmp/chat-sessions
-      const vttDir = path.resolve(process.cwd(), '.tmp', 'chat-sessions', 'discord', 'mock-recording-id')
+      const vttDir = path.resolve(process.cwd(), '.tmp', 'chat-sessions', UNIVERSE, 'mock-recording-id')
       await fsp.mkdir(vttDir, { recursive: true })
       await fsp.writeFile(path.join(vttDir, 'audio.vtt'), mockTranscript)
 
@@ -357,34 +357,34 @@ describe('handleMessage Features', () => {
   })
 
   it('extracts URL from referenced message content for transcription', async () => {
-      vi.mocked(Tools.chooseToolForMention).mockResolvedValue({ tool: 'transcribe' })
-      
-      // Current message has no URL/Attachment
-      mockMessage.content = 'transcribe this'
-      
-      // Referenced message has a URL in content
-      const refUrl = 'https://example.com/audio.mp3'
-      const refAttachments = new Map();
-      (refAttachments as any).first = () => undefined;
+    vi.mocked(Tools.chooseToolForMention).mockResolvedValue({ tool: 'transcribe' })
 
-      mockMessage.reference = { messageId: 'ref-msg-id' }
-      mockMessage.fetchReference.mockResolvedValue({
-          id: 'ref-msg-id',
-          content: `Check this out: ${refUrl}`,
-          attachments: refAttachments,
-          author: { bot: false }
-      })
+    // Current message has no URL/Attachment
+    mockMessage.content = 'transcribe this'
 
-      // Setup transcript file expectation
-      const vttDir = path.resolve(process.cwd(), '.tmp', 'chat-sessions', 'discord', 'mock-recording-id')
-      await fsp.mkdir(vttDir, { recursive: true })
-      await fsp.writeFile(path.join(vttDir, 'audio.vtt'), 'Mock transcript')
+    // Referenced message has a URL in content
+    const refUrl = 'https://example.com/audio.mp3'
+    const refAttachments = new Map()
+    ;(refAttachments as any).first = () => undefined
 
-      await handleMessage(mockMessage)
+    mockMessage.reference = { messageId: 'ref-msg-id' }
+    mockMessage.fetchReference.mockResolvedValue({
+      id: 'ref-msg-id',
+      content: `Check this out: ${refUrl}`,
+      attachments: refAttachments,
+      author: { bot: false }
+    })
 
-      // Expected flow
-      expect(mockReply.edit).toHaveBeenCalledWith('Transcribing audio…')
-      // Ensure the URL was passed to audioToTranscript
-      expect(AudioToDiagram.audioToTranscript).toHaveBeenCalledWith(expect.any(String), refUrl, expect.any(Function))
+    // Setup transcript file expectation
+    const vttDir = path.resolve(process.cwd(), '.tmp', 'chat-sessions', UNIVERSE, 'mock-recording-id')
+    await fsp.mkdir(vttDir, { recursive: true })
+    await fsp.writeFile(path.join(vttDir, 'audio.vtt'), 'Mock transcript')
+
+    await handleMessage(mockMessage)
+
+    // Expected flow
+    expect(mockReply.edit).toHaveBeenCalledWith('Transcribing audio…')
+    // Ensure the URL was passed to audioToTranscript
+    expect(AudioToDiagram.audioToTranscript).toHaveBeenCalledWith(expect.any(String), refUrl, expect.any(Function))
   })
 })
