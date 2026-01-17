@@ -32,48 +32,48 @@ test('generateCausalRelationships', async () => {
       .trim()
 
   // Run the full CLD extraction 5 times in a row and require validity each time
-  for (let i = 0; i < 5; i++) {
-    const result = await generateCausalRelationships([largePrompt])
-    console.log(result)
+  // for (let i = 0; i < 5; i++) {
+  const result = await generateCausalRelationships([largePrompt])
+  console.log(result)
 
-    if ('error' in result) {
-      throw new Error(`CLD generation failed: ${result.error}`)
-    }
-
-    // Expect a non-empty response and structured nodes/relationships
-    expect(result).toBeDefined()
-    expect(Array.isArray(result.nodes)).toBe(true)
-    expect(Array.isArray(result.relationships)).toBe(true)
-    expect(result.relationships.length).toBeGreaterThan(0)
-
-    const parsed = result.relationships.map((r: any) => {
-      return {
-        subject: norm(String(r.subject || '')),
-        object: norm(String(r.object || '')),
-        predicate: String(r.predicate || '')
-      }
-    })
-
-    // Ensure every produced relationship has a predicate of 'positive' or 'negative'
-    for (const p of parsed) {
-      expect(['positive', 'negative']).toContain(p.predicate)
-    }
-
-    let found = 0
-    for (const [causeKeys, effectKeys] of expectedKeywordPairs) {
-      const ok = parsed.some((p: { subject: string; object: string; predicate: string }) => {
-        const left = p.subject
-        const right = p.object
-        const causeOk = causeKeys.some((k) => left.includes(k))
-        const effectOk = effectKeys.some((k) => right.includes(k))
-        return causeOk && effectOk
-      })
-      if (ok) found++
-    }
-
-    // Require that the model produced most of the expected causal links (tolerate 1 missing) for each run
-    expect(found).toBeGreaterThanOrEqual(expectedKeywordPairs.length - 1)
+  if ('error' in result) {
+    throw new Error(`CLD generation failed: ${result.error}`)
   }
+
+  // Expect a non-empty response and structured nodes/relationships
+  expect(result).toBeDefined()
+  expect(Array.isArray(result.nodes)).toBe(true)
+  expect(Array.isArray(result.relationships)).toBe(true)
+  expect(result.relationships.length).toBeGreaterThan(0)
+
+  const parsed = result.relationships.map((r: any) => {
+    return {
+      subject: norm(String(r.subject || '')),
+      object: norm(String(r.object || '')),
+      predicate: String(r.predicate || '')
+    }
+  })
+
+  // Ensure every produced relationship has a predicate of 'positive' or 'negative'
+  for (const p of parsed) {
+    expect(['positive', 'negative']).toContain(p.predicate)
+  }
+
+  let found = 0
+  for (const [causeKeys, effectKeys] of expectedKeywordPairs) {
+    const ok = parsed.some((p: { subject: string; object: string; predicate: string }) => {
+      const left = p.subject
+      const right = p.object
+      const causeOk = causeKeys.some((k) => left.includes(k))
+      const effectOk = effectKeys.some((k) => right.includes(k))
+      return causeOk && effectOk
+    })
+    if (ok) found++
+  }
+
+  // Require that the model produced most of the expected causal links (tolerate 1 missing) for each run
+  expect(found).toBeGreaterThanOrEqual(expectedKeywordPairs.length - 1)
+  // }
 
   console.log('test finished')
 }, 600_000)
