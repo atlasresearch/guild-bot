@@ -17,7 +17,7 @@ export async function convertToMp3(inputPath: string, outputPath: string) {
 export async function ensureFfmpegAvailable() {
   try {
     await exec('ffmpeg -version')
-  } catch (err) {
+  } catch {
     throw new Error('ffmpeg not available on PATH')
   }
 }

@@ -16,7 +16,7 @@ async function fileExists(p: string) {
     const stat = await fsp.stat(p)
     console.log(`File ${p} exists:`, stat.isFile() && stat.size > 0)
     return stat.isFile() && stat.size > 0
-  } catch (e) {
+  } catch {
     return false
   }
 }
@@ -87,7 +87,7 @@ async function downloadToFile(url: string, dest: string) {
  * Main exported function used by the discord command handler.
  * Accepts an audio file URL, returns the path to the generated Kumu JSON file.
  */
-export async function transcribeAudioFile(inputPath: string, transcriptPath: string, audioFormat = 'mp3') {
+export async function transcribeAudioFile(inputPath: string, transcriptPath: string) {
   // Use the input file directly (whisper supports mp3); no WAV conversion required
   const dir = path.dirname(transcriptPath)
   const outBase = path.join(dir, 'transcript')
@@ -171,7 +171,12 @@ async function persistProgress(universe: string, id: string, msg: string) {
   }
 }
 
-const notify = async (universe: string, id: string, msg: string, onProgress = (message: string) => {}) => {
+const notify = async (
+  universe: string,
+  id: string,
+  msg: string,
+  onProgress: (message: string) => void | Promise<void> = () => {}
+) => {
   // call callback for live updates
   if (onProgress) {
     try {
@@ -182,7 +187,7 @@ const notify = async (universe: string, id: string, msg: string, onProgress = (m
   }
   try {
     await persistProgress(universe, id, msg)
-  } catch (e) {}
+  } catch {}
 }
 
 export async function audioToTranscript(
@@ -228,12 +233,12 @@ export async function audioToTranscript(
           const audioPath = path.join(sourceDir, `audio.${audioFormat}`)
           await fsp.copyFile(fp, audioPath)
         }
-      } catch (e) {
+      } catch {
         // fallthrough: if we can't read/copy the local file, downstream
         // download/copy logic will try to fetch the URL normally and fail.
       }
     }
-  } catch (e) {
+  } catch {
     // ignore malformed URL
   }
 
@@ -464,7 +469,7 @@ export async function audioToTranscript(
     try {
       const videoId = urlPath
       if (videoId) metadata.thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
-    } catch (e) {
+    } catch {
       // ignore
     }
   }
@@ -581,8 +586,8 @@ export async function transcriptToDiagrams(
   // Create processing marker (write timestamp)
   try {
     await fsp.writeFile(processingMarker, String(Date.now()), 'utf8')
-  } catch (e) {
-    debug('Could not write processing marker', e)
+  } catch {
+    debug('Could not write processing marker')
   }
 
   // Export graph JSON if missing or empty

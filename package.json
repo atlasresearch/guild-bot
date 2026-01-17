@@ -9,7 +9,8 @@
     "postinstall": "npm link @hexafield/agent-workflow",
     "dev": "NODE_ENV=development tsx watch src/index.ts",
     "lint": "tsc --noEmit && eslint . --ext .ts",
-    "test": "vitest run",
+    "eslint:fix": "eslint . --ext .ts --fix",
+    "test": "NODE_ENV=test vitest run",
     "ui:server": "tsx watch ui/server/index.ts",
     "ui:web": "vite --config ui/web/vite.config.ts",
     "ui:dev": "concurrently -k -n server,web -c green,cyan \"npm:ui:server\" \"npm:ui:web\""
@@ -19,6 +20,7 @@
   "dependencies": {
     "@discordjs/opus": "^0.10.0",
     "@discordjs/voice": "^0.19.0",
+    "@lancedb/lancedb": "^0.23.0",
     "@mermaid-js/mermaid-cli": "^11.12.0",
     "@resvg/resvg-js": "^2.6.2",
     "@snazzah/davey": "^0.1.7",

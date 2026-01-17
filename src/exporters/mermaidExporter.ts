@@ -168,7 +168,7 @@ export async function exportMermaid(
       } else {
         pngArgs = ' --scale 2'
       }
-    } catch (err) {
+    } catch {
       pngArgs = ' --scale 2'
     }
 
