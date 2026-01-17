@@ -11,7 +11,7 @@ function escapePath(p: string) {
 export async function ensureWhisperAvailable() {
   try {
     await exec('whisper-cli --help')
-  } catch (err) {
+  } catch {
     throw new Error('whisper-cli not available on PATH')
   }
 }

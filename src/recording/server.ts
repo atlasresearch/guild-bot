@@ -1,4 +1,3 @@
-import { IncomingMessage } from 'http'
 import { decode } from 'msgpackr'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
@@ -389,7 +388,7 @@ export async function startTranscriptionServer(port = Number(process.env.AUDIO_W
   const wss = new WebSocketServer({ port })
   console.log(`[rec-server] listening on ws://localhost:${port}`)
 
-  wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+  wss.on('connection', (ws: WebSocket) => {
     // Track a simple per-connection context so binary frames can omit metadata
     const ctx: { recId?: string; rate: number; channels: number } = { rate: 48000, channels: 2 }
 

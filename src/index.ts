@@ -4,6 +4,9 @@ import dotenv from 'dotenv'
 if (process.env.NODE_ENV === 'development') {
   dotenv.config({ path: '.env.dev' })
   console.log('Loaded development .env.dev file')
+} else if (process.env.NODE_ENV === 'test') {
+  dotenv.config({ path: '.env.test' })
+  console.log('Loaded test .env.test file')
 } else {
   dotenv.config({ path: '.env.prod' })
   console.log('Loaded production .env.prod file')
@@ -37,15 +40,21 @@ import {
   UNIVERSE
 } from './askQuestion'
 import { audioToTranscript, transcriptToDiagrams } from './audioToDiagram'
+import * as db from './database/db'
 import { CHAT_DIR } from './path'
 import { getActiveRecording, startRecording, stopRecording } from './recording/discord'
 import { startTranscriptionServer } from './recording/server'
+import * as messageProcessor from './services/messageProcessor'
+import * as ragService from './services/rag'
 import { generateMeetingDigest } from './workflows/meetingDigest.workflow'
 import { chooseToolForMention } from './workflows/tools'
 
 const DISCORD_TOKEN: string | undefined = process.env.DISCORD_TOKEN
 const LLM_URL: string | undefined = process.env.LLM_URL
 const RECORDINGS_ROOT = path.resolve(process.cwd(), '.tmp', 'recordings')
+
+// Knowledge Base Services - Init
+db.initDB(process.env.NODE_ENV).catch(console.error)
 
 const findRecordingById = async (recordingId?: string) => {
   if (!recordingId) return undefined
@@ -89,7 +98,7 @@ const resolveRecordingReference = async (channelId: string, opts: { meetingId?: 
   return findLatestRecordingForChannel(channelId)
 }
 
-const vttToTranscriptLines = (vtt: string) => {
+export const vttToTranscriptLines = (vtt: string) => {
   const lines = vtt.split(/\r?\n/)
   const cleaned: string[] = []
   for (const line of lines) {
@@ -271,10 +280,98 @@ client.once('ready', async () => {
               required: false
             }
           ]
+        },
+        {
+          name: 'guild',
+          description: 'Guild knowledge commands',
+          options: [
+            {
+              name: 'search',
+              description: 'Search message history',
+              type: ApplicationCommandOptionType.Subcommand,
+              options: [
+                {
+                  name: 'query',
+                  description: 'Search terms',
+                  type: ApplicationCommandOptionType.String,
+                  required: true
+                }
+              ]
+            },
+            {
+              name: 'ask',
+              description: 'Ask a question based on history',
+              type: ApplicationCommandOptionType.Subcommand,
+              options: [
+                { name: 'question', description: 'Question', type: ApplicationCommandOptionType.String, required: true }
+              ]
+            }
+          ]
         }
       ]
       await client.guilds.resolve(guildId as string)?.commands.set(commands)
       console.log('Registered slash commands in guild', guildId)
+
+      // Sync history on startup
+      const guild = client.guilds.resolve(guildId as string)
+      if (guild) {
+        console.log('Syncing channel history...')
+        const channels = await guild.channels.fetch()
+        for (const [id, channel] of channels) {
+          if (channel && channel.isTextBased()) {
+            await messageProcessor
+              .syncChannel(channel as TextBasedChannel)
+              .catch((e) => console.error(`Failed to sync channel ${id}`, e))
+          }
+        }
+        console.log('History sync complete.')
+
+        console.log('Syncing transcriptions...')
+        try {
+          const entries = await fs.readdir(RECORDINGS_ROOT, { withFileTypes: true })
+          for (const dir of entries) {
+            if (!dir.isDirectory()) continue
+            const recordingId = dir.name
+            const channelId = recordingId.split('-')[0] // Assuming CHANNELID-TIMESTAMP format
+            const vttPath = path.join(RECORDINGS_ROOT, recordingId, 'audio.vtt')
+
+            try {
+              await fs.stat(vttPath)
+              const vttContent = await fs.readFile(vttPath, 'utf-8')
+              const lines = vttToTranscriptLines(vttContent)
+              const fullTranscript = lines.join('\n')
+
+              if (fullTranscript.trim()) {
+                // Use folder timestamp?
+                // recordingId format: channelId-TIMESTAMP
+                // TIMESTAMP is ISO-like but replaced chars.
+                // Actually src/recording/discord.ts: utcStamp() -> iso with replaced chars.
+                // Let's rely on file mtime or try to parse string.
+                // Simpler: use file mtime.
+                const stat = await fs.stat(vttPath)
+
+                await messageProcessor.processMessage(
+                  {
+                    id: recordingId,
+                    guildId: guildId as string,
+                    channelId: channelId,
+                    authorId: 'system', // or 'transcription'
+                    content: fullTranscript,
+                    createdTimestamp: stat.mtimeMs,
+                    type: 'transcription'
+                  },
+                  true
+                )
+              }
+            } catch {
+              // No vtt or error reading
+            }
+          }
+          console.log('Transcription sync complete.')
+        } catch (e) {
+          console.error('Failed to sync transcriptions', e)
+        }
+      }
     }
   } catch (err) {
     console.warn('Failed to register commands', err)
@@ -286,6 +383,88 @@ client.once('ready', async () => {
 export async function handleInteraction(interaction: Interaction) {
   if (!interaction.isChatInputCommand()) return
   const chat = interaction as ChatInputCommandInteraction
+
+  if (chat.commandName === 'guild') {
+    const sub = chat.options.getSubcommand()
+    await chat.deferReply()
+
+    try {
+      if (sub === 'search') {
+        const query = chat.options.getString('query', true)
+        const results = await ragService.search(chat.guildId!, query)
+        if (results.length === 0) {
+          await chat.editReply('No results found.')
+          return
+        }
+        const formatResult = (r: any) => {
+          const link = `https://discord.com/channels/${r.guild_id}/${r.channel_id}/${r.id}`
+          const content = r.content || ''
+          const lines = content.split('\n')
+          const snippet = lines.filter(Boolean).slice(0, 2).join('\n')
+          const snip = snippet.length > 200
+          const snippetShortened = snip ? snippet.substring(0, 197) : snippet
+          const more = snip ? '...' : ''
+          return `${link}\n${snippetShortened}${more}`
+        }
+
+        const lines = results.map(formatResult)
+        const fullResponse = lines.join('\n')
+
+        if (fullResponse.length > 2000) {
+          await chat.editReply('Found many results. Creating a thread for details...')
+          const replyMsg = await chat.fetchReply()
+          if (replyMsg) {
+            try {
+              const thread = await replyMsg.startThread({
+                name: `Search: ${query.length > 20 ? query.substring(0, 20) + '...' : query}`,
+                autoArchiveDuration: 60
+              })
+
+              let currentChunk = ''
+              for (const line of lines) {
+                if (line.length > 2000) {
+                  // If a single line is too long, send current chunk, then split line
+                  if (currentChunk) {
+                    await thread.send(currentChunk)
+                    currentChunk = ''
+                  }
+                  // Split long line
+                  for (let i = 0; i < line.length; i += 2000) {
+                    await thread.send(line.substring(i, i + 2000))
+                  }
+                } else if ((currentChunk + '\n' + line).length > 2000) {
+                  await thread.send(currentChunk)
+                  currentChunk = line
+                } else {
+                  currentChunk = currentChunk ? currentChunk + '\n' + line : line
+                }
+              }
+              if (currentChunk) {
+                await thread.send(currentChunk)
+              }
+            } catch (err: any) {
+              console.error('Failed to create thread', err)
+              await chat.followUp({ content: `Failed to create thread: ${err.message}`, ephemeral: true })
+            }
+          }
+        } else {
+          await chat.editReply(fullResponse)
+        }
+      } else if (sub === 'ask') {
+        const question = chat.options.getString('question', true)
+        const answer = await ragService.ask(chat.guildId!, question)
+        if (answer.length > 2000) {
+          const att = new AttachmentBuilder(Buffer.from(answer, 'utf-8'), { name: `answer.txt` })
+          await chat.editReply({ content: 'Answer:', files: [att] })
+        } else {
+          await chat.editReply(answer)
+        }
+      }
+    } catch (e: any) {
+      await chat.editReply(`Error: ${e.message}`)
+    }
+    return
+  }
 
   if (chat.commandName === 'diagram') {
     const attachment = chat.options.getAttachment('audio', false)
@@ -490,7 +669,7 @@ export async function handleInteraction(interaction: Interaction) {
             return
           }
         }
-
+        /*
         const followUpTranscription = async () => {
           try {
             const followUp = await transcriptChannel.send({ content: 'Generating diagrams from the transcript…' })
@@ -521,7 +700,8 @@ export async function handleInteraction(interaction: Interaction) {
             }
           }
         }
-        // followUpTranscription()
+        followUpTranscription()
+        */
       } catch (e: any) {
         await chat.editReply({ content: `Failed to stop recording: ${e?.message ?? e}` })
       }
@@ -538,7 +718,7 @@ export async function handleMessage(message: Message) {
   const isMention = botId ? message.mentions.has(botId) : false
   const contextKey = message.channel?.isThread?.() ? message.channelId : message.reference?.messageId
   const existingContext = await getAskQuestionContext(contextKey)
-  const isThread = !!message.channel?.isThread?.()
+  // const isThread = !!message.channel?.isThread?.()
 
   if (!isMention && !existingContext) return
 
@@ -782,6 +962,33 @@ client.on('threadCreate', async (thread) => {
     await cloneAskQuestionContext((starter as any).id, thread.id)
   } catch (e) {
     console.warn('threadCreate handler failed', e)
+  }
+})
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return
+  try {
+    await messageProcessor.processDiscordMessage(message)
+  } catch (e) {
+    console.error('Failed to process message', e)
+  }
+})
+
+client.on('messageUpdate', async (oldMessage, newMessage) => {
+  if (newMessage.author?.bot) return
+  // newMessage might be partial. Fetch if needed.
+  if (newMessage.partial) {
+    try {
+      await newMessage.fetch()
+    } catch (e) {
+      console.error('Failed to fetch updated message', e)
+      return
+    }
+  }
+  try {
+    await messageProcessor.processDiscordMessage(newMessage as Message)
+  } catch (e) {
+    console.error('Failed to process message update', e)
   }
 })
 

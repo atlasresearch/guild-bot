@@ -45,11 +45,11 @@ export async function ensureSession(sessionId?: string, sessionDir = DEFAULT_SES
 
 /**
  * Save message attachments to session directory.
- * @param sessionDir 
- * @param sessionId 
- * @param messageId 
- * @param attachments 
- * @returns 
+ * @param sessionDir
+ * @param sessionId
+ * @param messageId
+ * @param attachments
+ * @returns
  */
 export async function saveMessageAttachments(
   sessionDir: string,
