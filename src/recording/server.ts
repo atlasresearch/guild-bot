@@ -380,7 +380,11 @@ async function handleStop(recId: string) {
   void processQueue(sess)
 }
 
-export async function startTranscriptionServer(port = Number(process.env.AUDIO_WS_PORT) || 8765) {
+const isDev = process.env.NODE_ENV !== 'production'
+
+const defaultPort = isDev ? 8766 : 8765
+
+export async function startTranscriptionServer(port = Number(process.env.AUDIO_WS_PORT) || defaultPort) {
   await ensureWhisperAvailable()
   const wss = new WebSocketServer({ port })
   console.log(`[rec-server] listening on ws://localhost:${port}`)

@@ -205,6 +205,12 @@ export async function audioToTranscript(
 
   const originalName = path.basename(urlPath) || `audio-${Date.now()}`
   let baseName = path.basename(originalName, path.extname(originalName))
+
+  // FIX: If handling a transcript file reference, strip the prefix to match the original ID
+  if (baseName.startsWith('transcript-')) {
+    baseName = baseName.replace(/^transcript-/, '')
+  }
+
   // Always use a temp folder under the OS temp dir for generated artifacts.
   // If the source is a local `file://` URL, copy the file into the temp
   // directory so we don't read/write inside the repo or other user folders.

@@ -9,6 +9,13 @@ export type AskQuestionContext = {
   sourceId: string
 }
 
+export type AttachmentSummary = {
+  originalName: string
+  storedPath: string
+  contentType: string
+  size: number
+}
+
 const DEFAULT_MODEL = process.env.ASKQUESTION_MODEL || process.env.ASKVIDEO_MODEL || 'github-copilot/gpt-5-mini'
 const DEFAULT_UNIVERSE = 'discord'
 const DEFAULT_SESSION_DIR = path.resolve(appRootPath.path, '.tmp', `${DEFAULT_UNIVERSE}-sessions`)
@@ -16,14 +23,101 @@ const CONTEXT_DIR = path.join(DEFAULT_SESSION_DIR, 'context')
 
 const contextPathFor = (key: string) => path.join(CONTEXT_DIR, `${key}.json`)
 
-async function ensureSession(sessionId?: string, sessionDir = DEFAULT_SESSION_DIR, name?: string) {
+/**
+ * Ensure a session exists, creating it if necessary.
+ * @param sessionId
+ * @param sessionDir
+ * @param name
+ * @returns
+ */
+export async function ensureSession(sessionId?: string, sessionDir = DEFAULT_SESSION_DIR, name?: string) {
   await fsp.mkdir(sessionDir, { recursive: true })
   if (sessionId) {
     const existing = await getSession(sessionDir, sessionId)
     if (existing) return { ...existing, directory: sessionDir }
   }
   const created = await createSession(sessionDir, name ? { name } : {})
+  // Ensure standard folders exist
+  await fsp.mkdir(path.join(sessionDir, created.id, 'attachments'), { recursive: true })
+  await fsp.mkdir(path.join(sessionDir, created.id, 'output'), { recursive: true })
   return { ...created, directory: sessionDir }
+}
+
+/**
+ * Save message attachments to session directory.
+ * @param sessionDir 
+ * @param sessionId 
+ * @param messageId 
+ * @param attachments 
+ * @returns 
+ */
+export async function saveMessageAttachments(
+  sessionDir: string,
+  sessionId: string,
+  messageId: string,
+  attachments: Array<{ url: string; name: string; contentType?: string | null }>
+): Promise<AttachmentSummary[]> {
+  if (!attachments.length) return []
+
+  const messageDir = path.join(sessionDir, sessionId, 'attachments', messageId)
+  await fsp.mkdir(messageDir, { recursive: true })
+
+  const results: AttachmentSummary[] = []
+
+  for (const att of attachments) {
+    try {
+      const res = await fetch(att.url)
+      if (!res.ok) {
+        console.warn(`Failed to fetch attachment ${att.url}: ${res.statusText}`)
+        continue
+      }
+
+      const safeName = att.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+      const filePath = path.join(messageDir, safeName)
+
+      const buffer = await res.arrayBuffer()
+      await fsp.writeFile(filePath, Buffer.from(buffer))
+
+      const stats = await fsp.stat(filePath)
+      console.log(`Saved attachment ${att.name} to ${filePath} (${stats.size} bytes)`)
+
+      results.push({
+        originalName: att.name,
+        storedPath: filePath,
+        contentType: att.contentType || 'application/octet-stream',
+        size: stats.size
+      })
+    } catch (e) {
+      console.warn(`Error saving attachment ${att.name}`, e)
+    }
+  }
+  return results
+}
+
+export async function formatAttachmentsForPrompt(attachments: AttachmentSummary[]): Promise<string> {
+  if (!attachments.length) return ''
+
+  const parts = ['Attachments provided:']
+  for (const att of attachments) {
+    let extra = ''
+    // If it's a text file (and reasonable size), inline it
+    const isText =
+      att.contentType.startsWith('text/') ||
+      ['.txt', '.md', '.json', '.xml', '.yml', '.yaml', '.log', '.csv', '.ts', '.js', '.py'].some((ext) =>
+        att.originalName.toLowerCase().endsWith(ext)
+      )
+
+    if (isText && att.size < 50 * 1024) {
+      // 50KB limit for inlining
+      try {
+        const content = await fsp.readFile(att.storedPath, 'utf8')
+        extra = `\nContent:\n\`\`\`\n${content}\n\`\`\``
+      } catch {}
+    }
+
+    parts.push(`- File: "${att.originalName}"\n  Path: ${att.storedPath}\n  Type: ${att.contentType}${extra}`)
+  }
+  return parts.join('\n\n')
 }
 
 async function readContext(key: string): Promise<AskQuestionContext | undefined> {

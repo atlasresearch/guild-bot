@@ -4,7 +4,7 @@
   "description": "Minimal Discord bot that sends JSON prompts to an LLM via HTTP and returns JSON responses (TypeScript)",
   "main": "dist/index.js",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "NODE_ENV=production tsx src/index.ts",
     "format": "prettier --write .",
     "postinstall": "npm link @hexafield/agent-workflow",
     "dev": "NODE_ENV=development tsx watch src/index.ts",

@@ -1,3 +1,14 @@
+import dotenv from 'dotenv'
+
+// use .env.dev in dev mode, .env.prod in production
+if (process.env.NODE_ENV === 'development') {
+  dotenv.config({ path: '.env.dev' })
+  console.log('Loaded development .env.dev file')
+} else {
+  dotenv.config({ path: '.env.prod' })
+  console.log('Loaded production .env.prod file')
+}
+
 import {
   ApplicationCommandDataResolvable,
   ApplicationCommandOptionType,
@@ -8,19 +19,24 @@ import {
   Interaction,
   Message,
   Partials,
-  TextBasedChannel
+  TextBasedChannel,
+  TextChannel
 } from 'discord.js'
-import 'dotenv/config'
+
 import fs from 'fs/promises'
 import path from 'path'
 import {
   answerQuestion,
   ASKQUESTION_CONSTANTS,
   cloneAskQuestionContext,
+  ensureSession,
+  formatAttachmentsForPrompt,
   getAskQuestionContext,
-  rememberAskQuestionContext
+  rememberAskQuestionContext,
+  saveMessageAttachments
 } from './askQuestion'
 import { audioToTranscript, transcriptToDiagrams } from './audioToDiagram'
+import { CHAT_DIR } from './path'
 import { getActiveRecording, startRecording, stopRecording } from './recording/discord'
 import { startTranscriptionServer } from './recording/server'
 import { generateMeetingDigest } from './workflows/meetingDigest.workflow'
@@ -29,14 +45,6 @@ import { chooseToolForMention } from './workflows/tools'
 const DISCORD_TOKEN: string | undefined = process.env.DISCORD_TOKEN
 const LLM_URL: string | undefined = process.env.LLM_URL
 const RECORDINGS_ROOT = path.resolve(process.cwd(), '.tmp', 'recordings')
-
-const TEXT_ATTACHMENT_EXTENSIONS = new Set(['txt', 'md', 'markdown', 'csv', 'json', 'log', 'yaml', 'yml', 'xml'])
-
-const isTextAttachment = (name?: string | null, contentType?: string | null) => {
-  const lowerName = name?.toLowerCase() ?? ''
-  const ext = lowerName.includes('.') ? lowerName.slice(lowerName.lastIndexOf('.') + 1) : ''
-  return Boolean(contentType?.startsWith('text/')) || (ext ? TEXT_ATTACHMENT_EXTENSIONS.has(ext) : false)
-}
 
 const findRecordingById = async (recordingId?: string) => {
   if (!recordingId) return undefined
@@ -140,50 +148,23 @@ const formatMeetingDigest = (digest: any) => {
   return lines.join('\n')
 }
 
-async function buildReferencedMessageContext(message: Message) {
-  let referenced: Message | null | undefined
-
+async function findReferencedMessage(message: Message) {
   if (message.reference?.messageId) {
     try {
-      referenced = await message.fetchReference()
+      return await message.fetchReference()
     } catch (e) {
       console.warn('Failed to fetch referenced message', e)
     }
   }
-
-  if (!referenced && message.channel?.isThread?.()) {
+  if (message.channel?.isThread?.()) {
     try {
-      referenced = await message.channel.fetchStarterMessage()
+      return await message.channel.fetchStarterMessage()
     } catch (e) {
       console.warn('Failed to fetch thread starter message', e)
     }
   }
-
-  if (!referenced) return
-
-  const attachmentTexts = {} as Record<string, string>
-  for (const attachment of referenced.attachments.values()) {
-    if (!isTextAttachment(attachment.name, attachment.contentType)) continue
-    try {
-      const res = await fetch(attachment.url)
-      if (!res.ok) throw new Error(`Failed to fetch attachment (${res.status})`)
-      const text = await res.text()
-      attachmentTexts[attachment.name || attachment.url] = text
-    } catch (e) {
-      console.warn('Failed to download referenced attachment', e)
-    }
-  }
-
-  return {
-    content: referenced.content,
-    attachments: attachmentTexts
-  }
+  return undefined
 }
-
-const serializeAttachments = (attachments: Record<string, string>): string =>
-  Object.entries(attachments)
-    .map((name, content) => `\`\`\`${name}\n${content}\n\`\`\``)
-    .join('\n\n')
 
 if (!DISCORD_TOKEN) {
   console.error('Missing DISCORD_TOKEN in environment')
@@ -301,8 +282,7 @@ client.once('ready', async () => {
 
 // We no longer expose a free-text prefix command. Interactions only.
 
-// Handle slash commands
-client.on('interactionCreate', async (interaction: Interaction) => {
+export async function handleInteraction(interaction: Interaction) {
   if (!interaction.isChatInputCommand()) return
   const chat = interaction as ChatInputCommandInteraction
 
@@ -546,29 +526,57 @@ client.on('interactionCreate', async (interaction: Interaction) => {
       }
     }
   }
-})
+}
 
-client.on('messageCreate', async (message) => {
+client.on('interactionCreate', handleInteraction)
+
+export async function handleMessage(message: Message) {
   if (message.author.bot || message.system) return
 
   const botId = client.user?.id
   const isMention = botId ? message.mentions.has(botId) : false
   const contextKey = message.channel?.isThread?.() ? message.channelId : message.reference?.messageId
   const existingContext = await getAskQuestionContext(contextKey)
+  const isThread = !!message.channel?.isThread?.()
 
   if (!isMention && !existingContext) return
 
-  await message.channel.sendTyping()
+  try {
+    await (message.channel as TextChannel).sendTyping()
+  } catch (e) {
+    console.warn('Failed to send typing indicator', e)
+  }
 
-  const reply = await message.reply('Optimizing tool selection...')
+  let reply: Message
+  const shouldCreateThread = isMention && !message.reference && !message.channel.isThread?.() && message.guild
+
+  if (shouldCreateThread) {
+    const rawContent = message.content.replace(/<@!?[0-9]+>/g, '').trim()
+    const threadName = rawContent.substring(0, 50) || 'Thread'
+    const thread = await message.startThread({
+      name: threadName,
+      autoArchiveDuration: 60
+    })
+    reply = await thread.send('Optimizing tool selection...')
+  } else {
+    reply = await message.reply('Optimizing tool selection...')
+  }
 
   const raw = message.content || ''
   const cleaned = botId ? raw.replace(new RegExp(`<@!?${botId}>`, 'g'), '').trim() : raw.trim()
   const question = cleaned || raw.trim()
-  if (!question) return
+
+  let sessionContext = existingContext
 
   try {
-    const referencedContext = await buildReferencedMessageContext(message)
+    if (!sessionContext) {
+      const session = await ensureSession(undefined, ASKQUESTION_CONSTANTS.SESSION_DIR, 'text')
+      sessionContext = {
+        sessionId: session.id,
+        sessionDir: ASKQUESTION_CONSTANTS.SESSION_DIR,
+        sourceId: session.title || 'text'
+      }
+    }
 
     const onProgress = async (m: string) => {
       try {
@@ -576,31 +584,78 @@ client.on('messageCreate', async (message) => {
       } catch {}
     }
 
-    const contextParts = [] as string[]
-    if (referencedContext?.content) contextParts.push(`Referenced Message:${referencedContext.content}`)
-    if (referencedContext?.attachments) {
-      contextParts.push(serializeAttachments(referencedContext.attachments))
+    const referencedMessage = await findReferencedMessage(message)
+
+    const mapAttachment = (a: any) => ({ url: a.url, name: a.name, contentType: a.contentType })
+
+    const referencedAttachments = referencedMessage
+      ? await saveMessageAttachments(
+          sessionContext.sessionDir,
+          sessionContext.sessionId,
+          referencedMessage.id,
+          Array.from(referencedMessage.attachments.values()).map(mapAttachment)
+        )
+      : []
+
+    const currentAttachments = await saveMessageAttachments(
+      sessionContext.sessionDir,
+      sessionContext.sessionId,
+      message.id,
+      Array.from(message.attachments.values()).map(mapAttachment)
+    )
+
+    const contextParts: string[] = []
+
+    if (referencedMessage?.content) {
+      contextParts.push(`Referenced Message:\n${referencedMessage.content}`)
     }
-    if (!contextParts.length) contextParts.push(question)
+
+    const refAttString = await formatAttachmentsForPrompt(referencedAttachments)
+    if (refAttString) contextParts.push(`Referenced Attachments:\n${refAttString}`)
+
+    const curAttString = await formatAttachmentsForPrompt(currentAttachments)
+    if (curAttString) contextParts.push(`Current Message Attachments:\n${curAttString}`)
+
+    if (question) contextParts.push(`User Question:\n${question}`)
+
     const fullContext = contextParts.join('\n\n')
+
+    // Tool selection
+    // We pass the full context as 'referenced.content' to give the tool chooser full visibility
     const chooser = await chooseToolForMention({
-      question,
-      referenced: referencedContext?.attachments,
+      question: question || '(No text, checking attachments)',
+      referenced: {
+        content: fullContext,
+        attachments: []
+      },
       model: ASKQUESTION_CONSTANTS.MODEL
     })
+
     const tool = chooser?.tool
     if (tool && tool !== 'none') {
       await reply.edit(`Using ${tool} tool...`)
 
+      // Existing tool logic (modified slightly to be robust)
       if (tool === 'diagram') {
         const attachment = message.attachments.first()
-        const url = attachment?.url ?? message.content.match(/https?:\/\/\S+/)?.[0]
-        if (!url && !referencedContext) {
+        // Use local path if we have it?
+        // Logic for audioToDiagram (which uses a URL/path)
+        const targetUrl = attachment?.url ?? message.content.match(/https?:\/\/\S+/)?.[0]
+        // Fallback to referenced?
+        const refUrl = referencedMessage?.attachments.first()?.url ?? referencedMessage?.content.match(/https?:\/\/\S+/)?.[0]
+
+        const validUrl = targetUrl || refUrl
+
+        if (!validUrl) {
           await reply.edit('I could not find an audio attachment or URL to generate a diagram from.')
           return
         }
+
         await reply.edit('Generating diagram from the provided audio…')
-        const id = referencedContext ? undefined : await audioToTranscript('discord', url!, onProgress)
+        // We use the URL because audioToDiagram likely handles downloading/caching separately or supports URLs
+        // (audioToTranscript('discord', ...))
+        console.log('diagram tool using URL:', validUrl, contextParts)
+        const id = await audioToTranscript('discord', validUrl, onProgress)
         const out = await transcriptToDiagrams('discord', id, fullContext, question, onProgress, false)
         const diagramData = await fs.readFile(out.kumuPath, 'utf-8')
         const pngData = await fs.readFile(out.pngPath)
@@ -616,15 +671,20 @@ client.on('messageCreate', async (message) => {
 
       if (tool === 'transcribe') {
         const attachment = message.attachments.first()
-        const url = attachment?.url ?? message.content.match(/https?:\/\/\S+/)?.[0]
-        if (!url) {
+        const targetUrl =
+          attachment?.url ??
+          message.content.match(/https?:\/\/\S+/)?.[0] ??
+          referencedMessage?.attachments.first()?.url ??
+          referencedMessage?.content.match(/https?:\/\/\S+/)?.[0]
+
+        if (!targetUrl) {
           await reply.edit('I could not find an audio attachment or URL to transcribe.')
           return
         }
         await reply.edit('Transcribing audio…')
         try {
-          const id = await audioToTranscript('discord', url, onProgress)
-          const vttPath = path.join(process.cwd(), '.tmp', 'discord', id, 'audio.vtt')
+          const id = await audioToTranscript('discord', targetUrl, onProgress)
+          const vttPath = path.join(CHAT_DIR, 'discord', id, 'audio.vtt')
           const vtt = await fs.readFile(vttPath, 'utf-8')
           if (vtt.length < 1900) {
             await reply.edit({ content: `Transcript:\n\n${vtt}` })
@@ -639,10 +699,16 @@ client.on('messageCreate', async (message) => {
       }
 
       if (tool === 'meeting_summarise') {
+        // Reuse fullContext as transcript lines?
+        // fullContext contains "Referenced Message: ...", "Attachments: ..."
+        // It might not be a clean transcript.
+        // But if the user replied to a transcript, it will be in referencedMessage.content
+
         const transcriptLines = fullContext
           .split(/\r?\n/)
           .map((l) => l.trim())
           .filter(Boolean)
+
         if (!transcriptLines.length) {
           await reply.edit('No transcript text available to summarise.')
           return
@@ -674,11 +740,11 @@ client.on('messageCreate', async (message) => {
 
     const answer = await answerQuestion({
       context: fullContext,
-      question,
-      sessionId: existingContext?.sessionId,
-      sessionDir: existingContext?.sessionDir,
+      question: question || '(No text question, analysis req)',
+      sessionId: sessionContext.sessionId,
+      sessionDir: sessionContext.sessionDir,
       model: ASKQUESTION_CONSTANTS.MODEL,
-      sourceId: existingContext?.sourceId ?? 'text'
+      sourceId: sessionContext.sourceId
     })
 
     if (answer.answer.length > 2000) {
@@ -689,23 +755,24 @@ client.on('messageCreate', async (message) => {
     } else {
       await reply.edit({ content: answer.answer })
     }
-
-    const targetKey = message.channel?.isThread?.() && message.channelId
-    if (targetKey) {
-      await rememberAskQuestionContext(targetKey, {
-        sessionId: answer.sessionId,
-        sessionDir: answer.sessionDir,
-        sourceId: existingContext?.sourceId ?? 'text'
-      })
-    }
   } catch (e) {
     try {
       await reply.edit(`Error processing your question: ${e instanceof Error ? e.message : String(e)}`)
     } catch {
-      await message.channel.send(`Error processing your question: ${e instanceof Error ? e.message : String(e)}`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (message.channel as any).send(
+        `Error processing your question: ${e instanceof Error ? e.message : String(e)}`
+      )
+    }
+  } finally {
+    const targetKey = reply.channel?.isThread?.() ? reply.channelId : undefined
+    if (targetKey && sessionContext) {
+      await rememberAskQuestionContext(targetKey, sessionContext)
     }
   }
-})
+}
+
+client.on('messageCreate', handleMessage)
 
 client.on('threadCreate', async (thread) => {
   try {
