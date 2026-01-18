@@ -315,16 +315,16 @@ client.once('ready', async () => {
               type: ApplicationCommandOptionType.Subcommand,
               options: [
                 {
-                  name: 'message',
-                  description: 'The message content, ID, or Link to tag',
-                  type: ApplicationCommandOptionType.String,
-                  required: false
-                },
-                {
                   name: 'tags',
                   description: 'Comma separated tags',
                   type: ApplicationCommandOptionType.String,
                   required: true
+                },
+                {
+                  name: 'message',
+                  description: 'The message content, ID, or Link to tag',
+                  type: ApplicationCommandOptionType.String,
+                  required: false
                 },
                 {
                   name: 'remove',
