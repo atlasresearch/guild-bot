@@ -99,3 +99,29 @@ export const processHistory = async (messages: IProcessableMessage[]) => {
     await processMessage(msg)
   }
 }
+
+export const addTags = async (id: string, tags: string[]) => {
+  const msg = await db.getMessage(id)
+  if (!msg) {
+    throw new Error('Message not found')
+  }
+
+  const newTags = Array.from(new Set([...msg.tags, ...tags]))
+  msg.tags = newTags
+  
+  await db.upsert(msg)
+}
+
+export const removeTags = async (id: string, tags: string[]) => {
+  const msg = await db.getMessage(id)
+  if (!msg) {
+    throw new Error('Message not found')
+  }
+
+  const tagSet = new Set(msg.tags)
+  tags.forEach(t => tagSet.delete(t))
+  
+  msg.tags = Array.from(tagSet)
+  
+  await db.upsert(msg)
+}

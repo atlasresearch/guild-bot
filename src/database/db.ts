@@ -11,7 +11,7 @@ export const initDB = async (env: string = process.env.NODE_ENV || 'development'
   const basePath = process.cwd()
   let relativePath = '.lancedb'
 
-  if (env === 'test') relativePath = '.lancedb_test'
+  if (env === 'test') relativePath = `.lancedb_test${process.env.VITEST_POOL_ID || ''}`
   if (env === 'production') relativePath = '.lancedb_prod'
   if (process.env.DB_PATH) relativePath = process.env.DB_PATH
 
@@ -74,6 +74,31 @@ export const getLatestMessage = async (channelId: string): Promise<{ id: string;
     results.sort((a, b) => (b.timestamp as number) - (a.timestamp as number))
 
     return { id: results[0].id as string, timestamp: results[0].timestamp as number }
+  } catch {
+    return null
+  }
+}
+
+export const getMessage = async (id: string): Promise<IDBSchema | null> => {
+  const table = await getTable()
+  if (!table) return null
+  try {
+    const results = await table.query().where(`id = '${id}'`).limit(1).toArray()
+    if (results.length === 0) return null
+    const res = results[0] as unknown as IDBSchema
+    // Ensure vector is improved if needed, or stripping extra props
+    const clean: IDBSchema = {
+        id: res.id,
+        guild_id: res.guild_id,
+        channel_id: res.channel_id,
+        user_id: res.user_id,
+        content: res.content,
+        timestamp: res.timestamp,
+        metadata: res.metadata,
+        tags: res.tags,
+        vector: Array.isArray(res.vector) ? res.vector : Array.from(res.vector as any)
+    }
+    return clean
   } catch {
     return null
   }

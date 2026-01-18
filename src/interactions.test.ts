@@ -129,8 +129,10 @@ describe('handleInteraction', () => {
     mockInteraction.options.getString.mockReturnValue('test query')
     
     // Create enough results to exceed 2000 chars
+    // specific length: ~ 200 (snippet) + 60 (link) = 260 per message. 
+    // 2000 / 260 ~ 7.7. So 10 messages should suffice.
     const longContent = 'a'.repeat(500)
-    const mockResults = Array(5).fill(null).map((_, i) => ({
+    const mockResults = Array(15).fill(null).map((_, i) => ({
       id: `msg-${i}`,
       user_id: `user-${i}`,
       content: longContent,

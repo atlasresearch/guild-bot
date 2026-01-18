@@ -299,6 +299,31 @@ client.once('ready', async () => {
               ]
             },
             {
+              name: 'tag',
+              description: 'Tag a message',
+              type: ApplicationCommandOptionType.Subcommand,
+              options: [
+                {
+                  name: 'message',
+                  description: 'The message content, ID, or Link to tag',
+                  type: ApplicationCommandOptionType.String,
+                  required: true
+                },
+                {
+                  name: 'tags',
+                  description: 'Comma separated tags',
+                  type: ApplicationCommandOptionType.String,
+                  required: true
+                },
+                {
+                  name: 'remove',
+                  description: 'Remove these tags instead of adding them',
+                  type: ApplicationCommandOptionType.Boolean,
+                  required: false
+                }
+              ]
+            },
+            {
               name: 'ask',
               description: 'Ask a question based on history',
               type: ApplicationCommandOptionType.Subcommand,
@@ -399,11 +424,12 @@ export async function handleInteraction(interaction: Interaction) {
         const formatResult = (r: any) => {
           const link = `https://discord.com/channels/${r.guild_id}/${r.channel_id}/${r.id}`
           const content = r.content || ''
-          const lines = content.split('\n')
-          const snippet = lines.filter(Boolean).slice(0, 2).join('\n')
+          const lines = content.split('\n').filter(Boolean)
+          const hasMoreLines = lines.length > 2
+          const snippet = lines.slice(0, 2).join('\n')
           const snip = snippet.length > 200
           const snippetShortened = snip ? snippet.substring(0, 197) : snippet
-          const more = snip ? '...' : ''
+          const more = snip || hasMoreLines ? '...' : ''
           return `${link}\n${snippetShortened}${more}`
         }
 
@@ -449,6 +475,76 @@ export async function handleInteraction(interaction: Interaction) {
           }
         } else {
           await chat.editReply(fullResponse)
+        }
+      } else if (sub === 'tag') {
+        const messageArg = chat.options.getString('message', true)
+        const tagsArg = chat.options.getString('tags', true)
+        const removeFn = chat.options.getBoolean('remove', false)
+        const tags = tagsArg.split(',').map((t) => t.trim()).filter(Boolean)
+
+        const linkMatch = messageArg.match(/https:\/\/discord\.com\/channels\/\d+\/\d+\/(\d+)/)
+        const idMatch = messageArg.match(/^\d+$/)
+
+        let messageId = linkMatch ? linkMatch[1] : idMatch ? idMatch[0] : null
+        const action = removeFn ? 'Untagged' : 'Tagged'
+
+        if (messageId) {
+          try {
+            if (removeFn) {
+              await messageProcessor.removeTags(messageId, tags)
+            } else {
+              await messageProcessor.addTags(messageId, tags)
+            }
+            await chat.editReply(`${action} message ${messageId} with: ${tags.join(', ')}`)
+          } catch (e: any) {
+            if (e.message === 'Message not found') {
+              try {
+                let channelId = chat.channelId
+                if (linkMatch) {
+                  const parts = messageArg.split('/')
+                  channelId = parts[parts.length - 2]
+                }
+
+                const channel = (await chat.guild?.channels.fetch(channelId)) as TextBasedChannel
+                if (channel && channel.isTextBased()) {
+                  const msg = await channel.messages.fetch(messageId)
+                  if (msg) {
+                    await messageProcessor.processDiscordMessage(msg)
+                    if (removeFn) {
+                      await messageProcessor.removeTags(messageId, tags)
+                    } else {
+                      await messageProcessor.addTags(messageId, tags)
+                    }
+                    await chat.editReply(`Synced and ${action.toLowerCase()} message ${messageId} with: ${tags.join(', ')}`)
+                    return
+                  }
+                }
+              } catch (err) {
+                console.warn('Failed to fetch for tagging', err)
+              }
+            }
+            await chat.editReply(`Failed to tag message: ${e.message}`)
+          }
+        } else {
+          const content = messageArg
+          const newId = chat.id
+
+          await messageProcessor.processMessage({
+            id: newId,
+            guildId: chat.guildId,
+            channelId: chat.channelId,
+            authorId: chat.user.id,
+            content: content,
+            createdTimestamp: chat.createdTimestamp,
+            type: 'user-tagged'
+          })
+
+          if (removeFn) {
+            await messageProcessor.removeTags(newId, tags)
+          } else {
+            await messageProcessor.addTags(newId, tags)
+          }
+          await chat.editReply(`Saved and ${action.toLowerCase()} content with: ${tags.join(', ')}`)
         }
       } else if (sub === 'ask') {
         const question = chat.options.getString('question', true)
