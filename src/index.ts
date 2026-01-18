@@ -195,6 +195,17 @@ const client = new Client({
   partials: [Partials.Channel]
 })
 
+client.on('messageDelete', async (message) => {
+  if (message.id) {
+    try {
+      await messageProcessor.deleteMessage(message.id)
+      console.log(`Deleted message ${message.id} from DB`)
+    } catch (e) {
+      console.error('Failed to handle message delete', e)
+    }
+  }
+})
+
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user?.tag}`)
 
@@ -307,7 +318,7 @@ client.once('ready', async () => {
                   name: 'message',
                   description: 'The message content, ID, or Link to tag',
                   type: ApplicationCommandOptionType.String,
-                  required: true
+                  required: false
                 },
                 {
                   name: 'tags',
@@ -477,64 +488,54 @@ export async function handleInteraction(interaction: Interaction) {
           await chat.editReply(fullResponse)
         }
       } else if (sub === 'tag') {
-        const messageArg = chat.options.getString('message', true)
+        const messageArg = chat.options.getString('message', false)
         const tagsArg = chat.options.getString('tags', true)
         const removeFn = chat.options.getBoolean('remove', false)
-        const tags = tagsArg.split(',').map((t) => t.trim()).filter(Boolean)
+        const tags = tagsArg
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean)
 
-        const linkMatch = messageArg.match(/https:\/\/discord\.com\/channels\/\d+\/\d+\/(\d+)/)
-        const idMatch = messageArg.match(/^\d+$/)
+        let targetMessageId: string | null = null
+        let isContent = false
 
-        let messageId = linkMatch ? linkMatch[1] : idMatch ? idMatch[0] : null
-        const action = removeFn ? 'Untagged' : 'Tagged'
-
-        if (messageId) {
-          try {
-            if (removeFn) {
-              await messageProcessor.removeTags(messageId, tags)
-            } else {
-              await messageProcessor.addTags(messageId, tags)
-            }
-            await chat.editReply(`${action} message ${messageId} with: ${tags.join(', ')}`)
-          } catch (e: any) {
-            if (e.message === 'Message not found') {
-              try {
-                let channelId = chat.channelId
-                if (linkMatch) {
-                  const parts = messageArg.split('/')
-                  channelId = parts[parts.length - 2]
-                }
-
-                const channel = (await chat.guild?.channels.fetch(channelId)) as TextBasedChannel
-                if (channel && channel.isTextBased()) {
-                  const msg = await channel.messages.fetch(messageId)
-                  if (msg) {
-                    await messageProcessor.processDiscordMessage(msg)
-                    if (removeFn) {
-                      await messageProcessor.removeTags(messageId, tags)
-                    } else {
-                      await messageProcessor.addTags(messageId, tags)
-                    }
-                    await chat.editReply(`Synced and ${action.toLowerCase()} message ${messageId} with: ${tags.join(', ')}`)
-                    return
-                  }
-                }
-              } catch (err) {
-                console.warn('Failed to fetch for tagging', err)
-              }
-            }
-            await chat.editReply(`Failed to tag message: ${e.message}`)
+        if (messageArg) {
+          const linkMatch = messageArg.match(/https:\/\/discord\.com\/channels\/\d+\/\d+\/(\d+)/)
+          const idMatch = messageArg.match(/^\d+$/)
+          if (linkMatch) {
+            targetMessageId = linkMatch[1]
+          } else if (idMatch) {
+            targetMessageId = idMatch[0]
+          } else {
+            isContent = true
           }
         } else {
-          const content = messageArg
-          const newId = chat.id
+          // No message argument = Tag the latest message in the channel
+          // This acts as a proxy for "reply" or "context" since Slash Commands don't pass reply references directly
+          try {
+            const messages = await chat.channel?.messages.fetch({ limit: 1 })
+            const last = messages?.first()
+            if (last) {
+              targetMessageId = last.id
+              // Ensure it's in our DB?
+              await messageProcessor.processDiscordMessage(last)
+            }
+          } catch (e) {
+            console.warn('Failed to fetch latest message', e)
+          }
+        }
 
+        const action = removeFn ? 'Untagged' : 'Tagged'
+
+        if (isContent && messageArg) {
+          // User provided content to save and tag
+          const newId = chat.id
           await messageProcessor.processMessage({
             id: newId,
             guildId: chat.guildId,
             channelId: chat.channelId,
             authorId: chat.user.id,
-            content: content,
+            content: messageArg,
             createdTimestamp: chat.createdTimestamp,
             type: 'user-tagged'
           })
@@ -545,6 +546,53 @@ export async function handleInteraction(interaction: Interaction) {
             await messageProcessor.addTags(newId, tags)
           }
           await chat.editReply(`Saved and ${action.toLowerCase()} content with: ${tags.join(', ')}`)
+        } else if (targetMessageId) {
+          // Tagging an existing message (ID, Link, or Latest)
+          try {
+            if (removeFn) {
+              await messageProcessor.removeTags(targetMessageId, tags)
+            } else {
+              await messageProcessor.addTags(targetMessageId, tags)
+            }
+            await chat.editReply(`${action} message ${targetMessageId} with: ${tags.join(', ')}`)
+          } catch (e: any) {
+            if (e.message === 'Message not found') {
+              // Try to sync if explicit ID was given (skip for latest as we just fetched it)
+              if (messageArg) {
+                // Was explicit
+                try {
+                  let channelId = chat.channelId
+                  // If link, extract channel
+                  if (messageArg.includes('https://')) {
+                    const match = messageArg.match(/channels\/\d+\/(\d+)\//)
+                    if (match) channelId = match[1]
+                  }
+
+                  const channel = (await chat.guild?.channels.fetch(channelId)) as TextBasedChannel
+                  if (channel && channel.isTextBased()) {
+                    const msg = await channel.messages.fetch(targetMessageId)
+                    if (msg) {
+                      await messageProcessor.processDiscordMessage(msg)
+                      if (removeFn) {
+                        await messageProcessor.removeTags(targetMessageId, tags)
+                      } else {
+                        await messageProcessor.addTags(targetMessageId, tags)
+                      }
+                      await chat.editReply(
+                        `Synced and ${action.toLowerCase()} message ${targetMessageId} with: ${tags.join(', ')}`
+                      )
+                      return
+                    }
+                  }
+                } catch (err) {
+                  console.warn('Failed to fetch/sync for tagging', err)
+                }
+              }
+            }
+            await chat.editReply(`Failed to tag message: ${e.message}`)
+          }
+        } else {
+          await chat.editReply('Could not determine message to tag.')
         }
       } else if (sub === 'ask') {
         const question = chat.options.getString('question', true)

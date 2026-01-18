@@ -64,6 +64,15 @@ export const getSince = async (channelId: string, timestamp: number) => {
   return await table.query().where(`channel_id = '${channelId}' AND timestamp > ${timestamp}`).toArray()
 }
 
+export const getMessagesInRange = async (channelId: string, minTime: number, maxTime: number) => {
+  const table = await getTable()
+  if (!table) return []
+  return await table
+    .query()
+    .where(`channel_id = '${channelId}' AND timestamp >= ${minTime} AND timestamp <= ${maxTime}`)
+    .toArray()
+}
+
 export const getLatestMessage = async (channelId: string): Promise<{ id: string; timestamp: number } | null> => {
   const table = await getTable()
   if (!table) return null
@@ -102,6 +111,12 @@ export const getMessage = async (id: string): Promise<IDBSchema | null> => {
   } catch {
     return null
   }
+}
+
+export const deleteMessage = async (id: string) => {
+  const table = await getTable()
+  if (!table) return
+  await table.delete(`id = '${id}'`)
 }
 
 export const dropDB = async () => {

@@ -14,6 +14,10 @@ export interface IProcessableMessage {
   type?: string // 'default' | 'transcription'
 }
 
+export const deleteMessage = async (id: string) => {
+  await db.deleteMessage(id)
+}
+
 export const processMessage = async (msg: IProcessableMessage, isTranscription: boolean = false) => {
   if (!msg.guildId) return
 
@@ -85,6 +89,21 @@ export const syncChannel = async (channel: TextBasedChannel) => {
   }
 
   const messages = Array.from(fetchedMessages.values()).sort((a, b) => a.createdTimestamp - b.createdTimestamp)
+
+  if (messages.length > 0) {
+    const minTs = messages[0].createdTimestamp
+    const maxTs = messages[messages.length - 1].createdTimestamp
+    
+    // Check for deletions in this window
+    const inDb = await db.getMessagesInRange(channel.id, minTs, maxTs)
+    const fetchedIds = new Set(messages.map(m => m.id))
+    
+    // If it's in DB (within this time range) but NOT in the fetched list, it was deleted.
+    const deleted = inDb.filter(rec => !fetchedIds.has(rec.id))
+    for (const d of deleted) {
+        await db.deleteMessage(d.id)
+    }
+  }
 
   for (const msg of messages) {
     if (msg.author.bot) continue
