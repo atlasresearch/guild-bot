@@ -10,3 +10,5 @@ package-lock.json
 .DS_Store
 .sessions/
 .lancedb_*
+.lancedb
+.opencode

@@ -364,7 +364,27 @@ async function handleAudioMessage(msg: any) {
 
 async function handleStop(recId: string) {
   const sess = SESSIONS.get(recId)
-  if (!sess) return
+  if (!sess) {
+    // If logic: handle empty session (silence only)
+    try {
+      const subs = SUBSCRIBERS.get(recId)
+      if (subs && subs.size) {
+        const msg = Buffer.from(JSON.stringify({ type: 'done', recordingId: recId, vttPath: null }), 'utf8')
+        for (const ws of subs) {
+          try {
+            ;(ws as any).readyState === (ws as any).OPEN && ws.send(msg)
+          } catch {}
+        }
+      }
+    } catch {}
+    try {
+      SUBSCRIBERS.delete(recId)
+    } catch {}
+    try {
+      SESSION_PREFS.delete(recId)
+    } catch {}
+    return
+  }
   // mark end time for trailing silence fill
   sess.endNs = process.hrtime.bigint()
   // queue any tail (shorter than full chunk) for each user

@@ -22,6 +22,7 @@ type RecSession = {
   done: Promise<{ recordingId: string; vttPath: string }>
   restoreNickname?: () => Promise<void>
   includeAudio: boolean
+  cancelled?: boolean
 }
 
 const sessions = new Map<string, RecSession>() // by guildId
@@ -39,15 +40,44 @@ export async function startRecording(
   if (sessions.has(guildId)) throw new Error('Recording already active in this guild')
 
   const recordingId = `${channel.id}-${utcStamp()}`
-  const conn = joinVoiceChannel({
+  
+  // Create a placeholder session to lock this guild immediately
+  sessions.set(guildId, {
+    recordingId: 'pending',
+    guildId,
     channelId: channel.id,
-    guildId: channel.guild.id,
-    adapterCreator: channel.guild.voiceAdapterCreator,
-    selfDeaf: false
+    ws: null!,
+    cleanup: async () => {},
+    done: Promise.resolve({ recordingId: '', vttPath: '' }),
+    includeAudio
   })
-  await entersState(conn, VoiceConnectionStatus.Ready, 20_000)
+  
+  try {
+    const conn = joinVoiceChannel({
+      channelId: channel.id,
+      guildId: channel.guild.id,
+      adapterCreator: channel.guild.voiceAdapterCreator,
+      selfDeaf: false
+    })
+    
+    // Attach cleanup logic to the pending session so that if stopRecording() is called
+    // while we are waiting, it can correctly destroy this connection.
+    const pendingSession = sessions.get(guildId)
+    if (pendingSession && pendingSession.recordingId === 'pending') {
+      const originalCleanup = pendingSession.cleanup
+      pendingSession.cleanup = async () => {
+        try {
+          conn.destroy()
+        } catch {}
+        return originalCleanup()
+      }
+    }
 
-  const port = Number(process.env.AUDIO_WS_PORT) || 8765
+    await entersState(conn, VoiceConnectionStatus.Ready, 20_000)
+
+    const isDev = process.env.NODE_ENV !== 'production'
+  const defaultPort = isDev ? 8766 : 8765
+  const port = Number(process.env.AUDIO_WS_PORT) || defaultPort
   const ws = new WebSocket(`ws://localhost:${port}`)
   await new Promise<void>((res, rej) => {
     ws.once('open', () => res())
@@ -61,8 +91,8 @@ export async function startRecording(
     try {
       const text = Buffer.isBuffer(data) ? data.toString('utf8') : String(data)
       const msg = JSON.parse(text)
-      if (msg && msg.type === 'done' && msg.recordingId === recordingId && msg.vttPath) {
-        resolveDone({ recordingId, vttPath: String(msg.vttPath) })
+      if (msg && msg.type === 'done' && msg.recordingId === recordingId) {
+        resolveDone({ recordingId, vttPath: msg.vttPath ? String(msg.vttPath) : '' })
       }
     } catch {}
   })
@@ -233,13 +263,39 @@ export async function startRecording(
     restoreNickname: restoreNicknameFn,
     includeAudio
   }
+  
+  // Final check if we were cancelled
+  const current = sessions.get(guildId)
+  if (!current || (current.recordingId === 'pending' && current.cancelled)) {
+    // We were cancelled
+    await cleanup()
+    ws.close()
+    sessions.delete(guildId)
+    throw new Error('Recording cancelled')
+  }
+
   sessions.set(guildId, sess)
   return sess
+  } catch (err) {
+    if (sessions.get(guildId)?.recordingId === 'pending') {
+      sessions.delete(guildId)
+    }
+    throw err
+  }
 }
 
 export async function stopRecording(guildId: string) {
   const sess = sessions.get(guildId)
   if (!sess) throw new Error('No active recording')
+  
+  if (sess.recordingId === 'pending') {
+    sess.cancelled = true
+    sessions.delete(guildId)
+    // Return a session-like object but with empty result fields.
+    // Spreading sess preserves textChannelId and other context.
+    return { ...sess, recordingId: '', vttPath: '' }
+  }
+
   await sess.cleanup()
   const result = await sess.done
   try {
@@ -250,7 +306,7 @@ export async function stopRecording(guildId: string) {
     debug('restoreNickname failed', e)
   }
   try {
-    sess.ws.close()
+    sess.ws?.close()
   } catch {}
   sessions.delete(guildId)
   return { ...sess, ...result }

@@ -51,6 +51,7 @@ import { chooseToolForMention } from './workflows/tools'
 
 const DISCORD_TOKEN: string | undefined = process.env.DISCORD_TOKEN
 const LLM_URL: string | undefined = process.env.LLM_URL
+const ALWAYS_RECORDING_CHANNEL_ID: string | undefined = process.env.ALWAYS_RECORDING_CHANNEL_ID
 const RECORDINGS_ROOT = path.resolve(process.cwd(), '.tmp', 'recordings')
 
 // Knowledge Base Services - Init
@@ -782,6 +783,11 @@ export async function handleInteraction(interaction: Interaction) {
 
         const sess = await stopRecording(guild.id)
 
+        if (!sess.vttPath) {
+          await chat.editReply('Recording was cancelled or did not produce any audio.')
+          return
+        }
+
         const transcriptChannel =
           (await fetchTextChannel(process.env.RECORDING_TRANSCRIPT_CHANNEL_ID)) ||
           (await fetchTextChannel(sess.textChannelId ?? active?.textChannelId)) ||
@@ -852,6 +858,91 @@ export async function handleInteraction(interaction: Interaction) {
     }
   }
 }
+
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  if (!ALWAYS_RECORDING_CHANNEL_ID) return
+
+  // Ignore events triggered by the bot itself
+  if (oldState.member?.user.id === client.user?.id || newState.member?.user.id === client.user?.id) {
+    return
+  }
+
+  const isRelevant =
+    oldState.channelId === ALWAYS_RECORDING_CHANNEL_ID || newState.channelId === ALWAYS_RECORDING_CHANNEL_ID
+  if (!isRelevant) return
+
+  const channelId = ALWAYS_RECORDING_CHANNEL_ID
+  const guild = newState.guild
+
+  const channel = await client.channels.fetch(channelId).catch(() => null)
+  if (!channel || !channel.isVoiceBased()) return
+
+  const humanMembers = channel.members.filter((m) => !m.user.bot)
+
+  // Re-check active status after async fetch, to avoid race conditions
+  const currentActive = getActiveRecording(guild.id)
+
+  // Helper to try and send to voice channel first (if supported), else fallback
+  const getSendableChannel = async (id?: string) => {
+    if (!id) return null
+    try {
+      const c = await client.channels.fetch(id)
+      if (!c) return null
+      // Check for send capability directly
+      if ('send' in c && typeof (c as any).send === 'function') return c as TextChannel
+      return null
+    } catch {
+      return null
+    }
+  }
+
+  if (humanMembers.size > 0 && !currentActive) {
+    try {
+      // Prefer using the Voice Channel itself for transcripts (Voice-Text)
+      // Otherwise fallback to env variable
+      let targetTextChannelId = channelId // try voice channel first
+      let dest = await getSendableChannel(targetTextChannelId)
+
+      if (!dest) {
+        targetTextChannelId = process.env.RECORDING_TRANSCRIPT_CHANNEL_ID || ''
+        dest = await getSendableChannel(targetTextChannelId)
+      }
+
+      await startRecording(guild.id, channel, false, dest?.id)
+      console.log(`[AutoRecord] Started recording in ${channel.name}`)
+      if (dest) {
+        await dest.send(`🎙️ Auto-recording started in <#${channelId}>.`).catch(() => {})
+      }
+    } catch (e) {
+      console.error('[AutoRecord] Failed to start', e)
+    }
+  } else if (humanMembers.size === 0 && currentActive && currentActive.channelId === channelId) {
+    try {
+      const sess = await stopRecording(guild.id)
+      if (!sess.vttPath) {
+        console.log(`[AutoRecord] Stopped recording in ${channel.name} (no audio/cancelled)`)
+        return
+      }
+
+      console.log(`[AutoRecord] Stopped recording in ${channel.name}`)
+
+      const destId = sess.textChannelId || process.env.RECORDING_TRANSCRIPT_CHANNEL_ID
+      const dest = await getSendableChannel(destId)
+
+      if (dest) {
+        const vtt = await fs.readFile(sess.vttPath)
+        await dest
+          .send({
+            content: `✅ Auto-recording stopped. Transcript ready (ID: ${sess.recordingId}).`,
+            files: [new AttachmentBuilder(Buffer.from(vtt), { name: 'audio.vtt' })]
+          })
+          .catch((e) => console.error('Failed to send transcript', e))
+      }
+    } catch (e) {
+      console.error('[AutoRecord] Failed to stop', e)
+    }
+  }
+})
 
 client.on('interactionCreate', handleInteraction)
 
