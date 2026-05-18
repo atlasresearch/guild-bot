@@ -2,6 +2,7 @@ import { createSession, extractResponseText, getSession, promptSession } from '@
 import appRootPath from 'app-root-path'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
+import { DEFAULT_MODEL } from './path'
 
 export type AskQuestionContext = {
   sessionId: string
@@ -16,7 +17,6 @@ export type AttachmentSummary = {
   size: number
 }
 
-const DEFAULT_MODEL = process.env.ASKQUESTION_MODEL || process.env.ASKVIDEO_MODEL || 'github-copilot/gpt-5-mini'
 export const UNIVERSE = process.env.UNIVERSE || 'discord-dev'
 const DEFAULT_SESSION_DIR = path.resolve(appRootPath.path, '.tmp', `${UNIVERSE}-sessions`)
 const CONTEXT_DIR = path.join(DEFAULT_SESSION_DIR, 'context')

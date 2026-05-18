@@ -8,12 +8,13 @@ import {
 } from '@hexafield/agent-workflow'
 
 import os from 'node:os'
+import { DEFAULT_MODEL } from '../path'
 
 export const meetingDigestWorkflowDocument = {
   $schema: 'https://hyperagent.dev/schemas/agent-workflow.json',
   id: 'meeting-digest.v1',
   description: 'Summarise meetings into insights, action items, decisions, and open questions.',
-  model: 'github-copilot/gpt-5-mini',
+  model: DEFAULT_MODEL,
   sessions: {
     roles: [
       { role: 'insight' as const, nameTemplate: '{{runId}}-digest-insight' },
@@ -215,7 +216,7 @@ export async function generateMeetingDigest(
   transcriptLines: string[],
   userPrompt: string | undefined,
   onProgress?: (msg: string) => void,
-  model = 'github-copilot/gpt-5-mini',
+  model = DEFAULT_MODEL,
   sessionId?: string,
   sessionDir?: string
 ): Promise<MeetingDigestParserOutput> {

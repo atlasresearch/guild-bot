@@ -8,12 +8,13 @@ import {
 } from '@hexafield/agent-workflow'
 
 import os from 'node:os'
+import { DEFAULT_MODEL } from '../path'
 
 export const cldWorkflowDocument = {
   $schema: 'https://hyperagent.dev/schemas/agent-workflow.json',
   id: 'cld.v1',
   description: 'Extract causal relationships and node classifications for causal loop diagrams.',
-  model: 'github-copilot/gpt-5-mini',
+  model: DEFAULT_MODEL,
   sessions: {
     roles: [
       { role: 'summariser' as const, nameTemplate: '{{runId}}-cld-summariser' },
@@ -241,7 +242,7 @@ export async function generateCausalRelationships(
   try {
     const response = await runAgentWorkflow(cldWorkflowDefinition, {
       user: { instructions: userInstructions },
-      model: 'github-copilot/gpt-5-mini',
+      model: DEFAULT_MODEL,
       sessionDir: workspacePath,
       workflowId: cldWorkflowDefinition.id,
       workflowSource: 'user',

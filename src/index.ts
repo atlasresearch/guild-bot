@@ -1,17 +1,3 @@
-import dotenv from 'dotenv'
-
-// use .env.dev in dev mode, .env.prod in production
-if (process.env.NODE_ENV === 'development') {
-  dotenv.config({ path: '.env.dev' })
-  console.log('Loaded development .env.dev file')
-} else if (process.env.NODE_ENV === 'test') {
-  dotenv.config({ path: '.env.test' })
-  console.log('Loaded test .env.test file')
-} else {
-  dotenv.config({ path: '.env.prod' })
-  console.log('Loaded production .env.prod file')
-}
-
 import {
   ApplicationCommandDataResolvable,
   ApplicationCommandOptionType,
