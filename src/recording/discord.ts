@@ -1,4 +1,4 @@
-import { OpusEncoder } from '@discordjs/opus'
+import OpusScript from 'opusscript'
 import {
   EndBehaviorType,
   entersState,
@@ -98,7 +98,7 @@ export async function startRecording(
   })
 
   const receiver = conn.receiver
-  const decoders = new Map<string, OpusEncoder>()
+  const decoders = new Map<string, OpusScript>()
   const streams = new Map<string, Readable>()
   const userNames = new Map<string, string>()
   // nickname handling
@@ -183,7 +183,7 @@ export async function startRecording(
     } catch {
       debug(`Failed to fetch member name for userId: ${userId}`)
     }
-    const decoder = new OpusEncoder(48000, 2)
+    const decoder = new OpusScript(48000, 2)
     decoders.set(userId, decoder)
     streams.set(userId, opusStream as unknown as Readable)
     opusStream

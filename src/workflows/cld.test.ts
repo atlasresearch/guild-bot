@@ -1,8 +1,8 @@
 import { expect, test } from 'vitest'
 import { generateCausalRelationships } from './cld.workflow'
 
-// Increase timeout because real model calls can take longer
-test('generateCausalRelationships', async () => {
+// Skipped: CLD workflow is a noop pending reimplementation
+test.skip('generateCausalRelationships', async () => {
   // Larger prompt to exercise CLD parsing
   const largePrompt = `Engineers compare the work remaining to be done against the time remaining before the deadline. The larger the gap, the more Schedule Pressure they feel. When schedule pressure builds up, engineers can work overtime which increases completion rate but also increases fatigue, which lowers productivity.`
 

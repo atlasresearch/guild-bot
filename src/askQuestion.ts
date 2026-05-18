@@ -1,7 +1,8 @@
-import { createSession, extractResponseText, getSession, promptSession } from '@hexafield/agent-workflow'
 import appRootPath from 'app-root-path'
+import { randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
+import ollama from 'ollama'
 import { DEFAULT_MODEL } from './path'
 
 export type AskQuestionContext = {
@@ -23,24 +24,38 @@ const CONTEXT_DIR = path.join(DEFAULT_SESSION_DIR, 'context')
 
 const contextPathFor = (key: string) => path.join(CONTEXT_DIR, `${key}.json`)
 
+type SessionMeta = { id: string; title?: string; createdAt: string }
+
+async function readSessionMeta(sessionDir: string, sessionId: string): Promise<SessionMeta | undefined> {
+  try {
+    const raw = await fsp.readFile(path.join(sessionDir, sessionId, 'meta.json'), 'utf8')
+    return JSON.parse(raw) as SessionMeta
+  } catch {
+    return undefined
+  }
+}
+
+async function writeSessionMeta(sessionDir: string, meta: SessionMeta) {
+  const dir = path.join(sessionDir, meta.id)
+  await fsp.mkdir(dir, { recursive: true })
+  await fsp.writeFile(path.join(dir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8')
+}
+
 /**
  * Ensure a session exists, creating it if necessary.
- * @param sessionId
- * @param sessionDir
- * @param name
- * @returns
  */
 export async function ensureSession(sessionId?: string, sessionDir = DEFAULT_SESSION_DIR, name?: string) {
   await fsp.mkdir(sessionDir, { recursive: true })
   if (sessionId) {
-    const existing = await getSession(sessionDir, sessionId)
+    const existing = await readSessionMeta(sessionDir, sessionId)
     if (existing) return { ...existing, directory: sessionDir }
   }
-  const created = await createSession(sessionDir, name ? { name } : {})
-  // Ensure standard folders exist
-  await fsp.mkdir(path.join(sessionDir, created.id, 'attachments'), { recursive: true })
-  await fsp.mkdir(path.join(sessionDir, created.id, 'output'), { recursive: true })
-  return { ...created, directory: sessionDir }
+  const id = randomUUID()
+  const meta: SessionMeta = { id, title: name, createdAt: new Date().toISOString() }
+  await writeSessionMeta(sessionDir, meta)
+  await fsp.mkdir(path.join(sessionDir, id, 'attachments'), { recursive: true })
+  await fsp.mkdir(path.join(sessionDir, id, 'output'), { recursive: true })
+  return { ...meta, directory: sessionDir }
 }
 
 /**
@@ -146,19 +161,26 @@ export async function answerQuestion(options: {
   const model = options.model || DEFAULT_MODEL
   const sessionDir = options.sessionDir || DEFAULT_SESSION_DIR
   const session = await ensureSession(options.sessionId, sessionDir, options.sourceId)
-  const prompts = [
-    'You answer questions. Respond concisely and avoid speculation. Use only internal reasoning and web search in your answer.',
-    `Context:\n${options.context}`,
-    `User question: ${options.question}`
-  ]
-  const response = await promptSession(session, prompts, model)
-  const answer = extractResponseText(response.parts ?? (response as any))
+
+  const response = await ollama.chat({
+    model,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You answer questions. Respond concisely and avoid speculation. Use only internal reasoning and web search in your answer.'
+      },
+      { role: 'user', content: `Context:\n${options.context}\n\nUser question: ${options.question}` }
+    ]
+  })
+
+  const answer = response.message?.content ?? ''
   return {
     question: options.question,
     answer,
     sessionId: (session as any).id as string,
     sessionDir,
-    parts: response.parts ?? [],
+    parts: [answer],
     sourceId: options.sourceId || (session as any).title || 'text'
   }
 }

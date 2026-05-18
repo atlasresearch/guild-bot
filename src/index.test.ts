@@ -30,39 +30,26 @@ vi.mock('discord.js', async () => {
   }
 })
 
-// 2. Mock Agent Workflow
-vi.mock('@hexafield/agent-workflow', async () => {
-  const actual = await vi.importActual('@hexafield/agent-workflow')
-  return {
-    ...actual,
-    promptSession: vi.fn().mockResolvedValue({ parts: ['Mock LLM Answer'] }),
-    runAgentWorkflow: vi.fn().mockResolvedValue({
-      result: Promise.resolve({
-        rounds: [
-          {
-            steps: {
-              integrator: {
-                parsed: {
-                  insights: [{ summary: 'Mock Insight' }],
-                  actionItems: [{ task: 'Mock Action' }],
-                  decisions: [{ decision: 'Mock Decision' }],
-                  openQuestions: [{ question: 'Mock Question' }]
-                }
-              }
-            }
-          }
-        ]
-      })
-    }),
-    createSession: vi.fn().mockResolvedValue({ id: 'mock-session-id', title: 'test session' }),
-    getSession: vi.fn().mockResolvedValue({ id: 'mock-session-id', title: 'test session' }),
-    extractResponseText: vi.fn().mockReturnValue('Mock LLM Answer')
+// 2. Mock ollama (replaces agent-workflow)
+vi.mock('ollama', () => ({
+  default: {
+    chat: vi.fn().mockResolvedValue({ message: { content: 'Mock LLM Answer' } })
   }
-})
+}))
 
 // 3. Mock Tools Abstraction (Decision Logic)
 vi.mock('./workflows/tools', () => ({
   chooseToolForMention: vi.fn().mockResolvedValue({ tool: 'none' })
+}))
+
+// 3b. Mock Meeting Digest Workflow (noop replacement)
+vi.mock('./workflows/meetingDigest.workflow', () => ({
+  generateMeetingDigest: vi.fn().mockResolvedValue({
+    insights: [{ summary: 'Mock Insight' }],
+    actionItems: [{ task: 'Mock Action' }],
+    decisions: [{ decision: 'Mock Decision' }],
+    openQuestions: [{ question: 'Mock Question' }]
+  })
 }))
 
 // 4. Mock Audio/Heavy Processing
@@ -86,7 +73,7 @@ vi.mock('./recording/server', () => ({
 
 // --- Imports ---
 
-import * as AgentWorkflow from '@hexafield/agent-workflow'
+import ollama from 'ollama'
 import { ASKQUESTION_CONSTANTS, UNIVERSE } from './askQuestion'
 import * as AudioToDiagram from './audioToDiagram'
 import { handleMessage } from './index'
@@ -238,7 +225,7 @@ describe('handleMessage Features', () => {
     await handleMessage(mockMessage)
 
     expect(mockReply.edit).toHaveBeenCalledWith('Thinking...')
-    expect(AgentWorkflow.promptSession).toHaveBeenCalled()
+    expect(ollama.chat).toHaveBeenCalled()
     expect(mockReply.edit).toHaveBeenCalledWith(expect.objectContaining({ content: 'Mock LLM Answer' }))
   })
 
@@ -252,7 +239,7 @@ describe('handleMessage Features', () => {
     // Check if fetch was called.
     // We check partial match mainly to be safe if environment wraps it
     expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('http://foo/doc.txt'))
-    expect(AgentWorkflow.promptSession).toHaveBeenCalled()
+    expect(ollama.chat).toHaveBeenCalled()
   })
 
   // --- 5. Feature Paths (Tools) ---
