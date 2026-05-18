@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import * as db from './db'
 import { IDBSchema } from './schema'

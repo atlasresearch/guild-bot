@@ -93,15 +93,15 @@ export const syncChannel = async (channel: TextBasedChannel) => {
   if (messages.length > 0) {
     const minTs = messages[0].createdTimestamp
     const maxTs = messages[messages.length - 1].createdTimestamp
-    
+
     // Check for deletions in this window
     const inDb = await db.getMessagesInRange(channel.id, minTs, maxTs)
-    const fetchedIds = new Set(messages.map(m => m.id))
-    
+    const fetchedIds = new Set(messages.map((m) => m.id))
+
     // If it's in DB (within this time range) but NOT in the fetched list, it was deleted.
-    const deleted = inDb.filter(rec => !fetchedIds.has(rec.id))
+    const deleted = inDb.filter((rec) => !fetchedIds.has(rec.id))
     for (const d of deleted) {
-        await db.deleteMessage(d.id)
+      await db.deleteMessage(d.id)
     }
   }
 
@@ -127,7 +127,7 @@ export const addTags = async (id: string, tags: string[]) => {
 
   const newTags = Array.from(new Set([...msg.tags, ...tags]))
   msg.tags = newTags
-  
+
   await db.upsert(msg)
 }
 
@@ -138,9 +138,9 @@ export const removeTags = async (id: string, tags: string[]) => {
   }
 
   const tagSet = new Set(msg.tags)
-  tags.forEach(t => tagSet.delete(t))
-  
+  tags.forEach((t) => tagSet.delete(t))
+
   msg.tags = Array.from(tagSet)
-  
+
   await db.upsert(msg)
 }

@@ -97,15 +97,15 @@ export const getMessage = async (id: string): Promise<IDBSchema | null> => {
     const res = results[0] as unknown as IDBSchema
     // Ensure vector is improved if needed, or stripping extra props
     const clean: IDBSchema = {
-        id: res.id,
-        guild_id: res.guild_id,
-        channel_id: res.channel_id,
-        user_id: res.user_id,
-        content: res.content,
-        timestamp: res.timestamp,
-        metadata: res.metadata,
-        tags: res.tags,
-        vector: Array.isArray(res.vector) ? res.vector : Array.from(res.vector as any)
+      id: res.id,
+      guild_id: res.guild_id,
+      channel_id: res.channel_id,
+      user_id: res.user_id,
+      content: res.content,
+      timestamp: res.timestamp,
+      metadata: res.metadata,
+      tags: res.tags,
+      vector: Array.isArray(res.vector) ? res.vector : Array.from(res.vector as any)
     }
     return clean
   } catch {

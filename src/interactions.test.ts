@@ -1,5 +1,4 @@
-
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as ragService from './services/rag'
 
 // Mock dependencies
@@ -10,16 +9,16 @@ vi.mock('./services/rag', () => ({
 
 // Mock discord.js things (simplified)
 vi.mock('discord.js', async () => {
-    const actual = await vi.importActual('discord.js')
-    return {
-        ...actual,
-        AttachmentBuilder: vi.fn(),
-        Client: vi.fn().mockImplementation(() => ({
-          once: vi.fn(),
-          on: vi.fn(),
-          login: vi.fn().mockResolvedValue('token')
-        }))
-    }
+  const actual = await vi.importActual('discord.js')
+  return {
+    ...actual,
+    AttachmentBuilder: vi.fn(),
+    Client: vi.fn().mockImplementation(() => ({
+      once: vi.fn(),
+      on: vi.fn(),
+      login: vi.fn().mockResolvedValue('token')
+    }))
+  }
 })
 
 describe('handleInteraction', () => {
@@ -30,22 +29,22 @@ describe('handleInteraction', () => {
 
   beforeAll(() => {
     process.env.DISCORD_TOKEN = 'mock-token'
-    process.env.LLM_URL = 'http://mock-llm' 
+    process.env.LLM_URL = 'http://mock-llm'
   })
 
   beforeEach(async () => {
     vi.clearAllMocks()
-    
+
     // Dynamic import to avoid top-level execution issues
     const index = await import('./index')
     handleInteraction = index.handleInteraction
 
     mockThread = {
-      send: vi.fn().mockResolvedValue({}),
+      send: vi.fn().mockResolvedValue({})
     }
 
     mockMessage = {
-      startThread: vi.fn().mockResolvedValue(mockThread),
+      startThread: vi.fn().mockResolvedValue(mockThread)
     }
 
     mockInteraction = {
@@ -55,18 +54,18 @@ describe('handleInteraction', () => {
       channelId: 'channel-123',
       options: {
         getSubcommand: vi.fn(),
-        getString: vi.fn(),
+        getString: vi.fn()
       },
       deferReply: vi.fn().mockResolvedValue({}),
       editReply: vi.fn().mockResolvedValue({}),
-      fetchReply: vi.fn().mockResolvedValue(mockMessage),
+      fetchReply: vi.fn().mockResolvedValue(mockMessage)
     }
   })
 
   it('should format search results with links and send as single message if short', async () => {
     mockInteraction.options.getSubcommand.mockReturnValue('search')
     mockInteraction.options.getString.mockReturnValue('test query')
-    
+
     const mockResults = [
       {
         id: 'msg-1',
@@ -82,17 +81,17 @@ describe('handleInteraction', () => {
     await handleInteraction(mockInteraction)
 
     expect(ragService.search).toHaveBeenCalledWith('guild-123', 'test query')
-    
+
     // Check formatting
     const expectedLink = 'https://discord.com/channels/guild-1/channel-1/msg-1'
     const calls = mockInteraction.editReply.mock.calls
     const replyContent = calls[0][0]
-    
+
     expect(replyContent).toContain(expectedLink)
     expect(replyContent).toContain('Hello world')
     expect(replyContent).not.toContain('<@user-1>')
     expect(replyContent.trim().startsWith('https://discord.com')).toBe(true)
-    
+
     // Should NOT create thread
     expect(mockMessage.startThread).not.toHaveBeenCalled()
   })
@@ -100,7 +99,7 @@ describe('handleInteraction', () => {
   it('should truncate multi-line content to 2 lines', async () => {
     mockInteraction.options.getSubcommand.mockReturnValue('search')
     mockInteraction.options.getString.mockReturnValue('test query')
-    
+
     const mockResults = [
       {
         id: 'msg-1',
@@ -114,7 +113,7 @@ describe('handleInteraction', () => {
     vi.mocked(ragService.search).mockResolvedValue(mockResults)
 
     await handleInteraction(mockInteraction)
-    
+
     const calls = mockInteraction.editReply.mock.calls
     const replyContent = calls[0][0]
 
@@ -127,33 +126,35 @@ describe('handleInteraction', () => {
   it('should create a thread and send chunks if results are long', async () => {
     mockInteraction.options.getSubcommand.mockReturnValue('search')
     mockInteraction.options.getString.mockReturnValue('test query')
-    
+
     // Create enough results to exceed 2000 chars
-    // specific length: ~ 200 (snippet) + 60 (link) = 260 per message. 
+    // specific length: ~ 200 (snippet) + 60 (link) = 260 per message.
     // 2000 / 260 ~ 7.7. So 10 messages should suffice.
     const longContent = 'a'.repeat(500)
-    const mockResults = Array(15).fill(null).map((_, i) => ({
-      id: `msg-${i}`,
-      user_id: `user-${i}`,
-      content: longContent,
-      timestamp: 1600000000000,
-      guild_id: 'guild-1',
-      channel_id: 'channel-1'
-    }))
-    
+    const mockResults = Array(15)
+      .fill(null)
+      .map((_, i) => ({
+        id: `msg-${i}`,
+        user_id: `user-${i}`,
+        content: longContent,
+        timestamp: 1600000000000,
+        guild_id: 'guild-1',
+        channel_id: 'channel-1'
+      }))
+
     vi.mocked(ragService.search).mockResolvedValue(mockResults)
 
     await handleInteraction(mockInteraction)
 
     // Should inform user about thread
     expect(mockInteraction.editReply).toHaveBeenCalledWith(expect.stringContaining('Creating a thread'))
-    
+
     // Should create thread
     expect(mockMessage.startThread).toHaveBeenCalledWith({
-        name: 'Search: test query',
-        autoArchiveDuration: 60
+      name: 'Search: test query',
+      autoArchiveDuration: 60
     })
-    
+
     // Should send to thread
     expect(mockThread.send).toHaveBeenCalled()
   })
