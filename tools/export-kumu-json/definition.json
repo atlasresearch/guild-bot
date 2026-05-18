@@ -1,0 +1,24 @@
+{
+  "type": "function",
+  "function": {
+    "name": "export_kumu_json",
+    "description": "Convert CLD nodes and relationships to a Kumu-compatible JSON file.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "Array of node objects with label and type"
+        },
+        "relationships": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "Array of relationship objects with subject, object, predicate"
+        },
+        "name": { "type": "string", "description": "Name for the output file (optional)" }
+      },
+      "required": ["nodes", "relationships"]
+    }
+  }
+}

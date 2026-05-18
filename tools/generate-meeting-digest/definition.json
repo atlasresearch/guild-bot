@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "generate_meeting_digest",
+    "description": "Extract insights, action items, decisions, and open questions from a meeting transcript.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "transcript_lines": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Array of transcript lines (plain text, timing stripped)"
+        },
+        "prompt": { "type": "string", "description": "Optional steering prompt to focus the analysis" }
+      },
+      "required": ["transcript_lines"]
+    }
+  }
+}

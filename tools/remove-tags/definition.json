@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "remove_tags",
+    "description": "Remove tags from an indexed message.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "message_id": { "type": "string", "description": "Discord message snowflake ID" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags to remove"
+        }
+      },
+      "required": ["message_id", "tags"]
+    }
+  }
+}

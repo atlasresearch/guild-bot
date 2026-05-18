@@ -1,0 +1,10 @@
+{
+  "name": "@guildbot/tool-remove-tags",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@guildbot/types": "workspace:*",
+    "@guildbot/message-processor": "workspace:*"
+  }
+}

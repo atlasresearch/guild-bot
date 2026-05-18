@@ -1,0 +1,15 @@
+{
+  "type": "function",
+  "function": {
+    "name": "search_messages",
+    "description": "Semantic search over guild message history. Works with broad queries (e.g. 'recent discussions') or specific topics. Returns the most relevant messages.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "Natural language search query — can be broad or specific" },
+        "limit": { "type": "number", "description": "Max results (default 5)" }
+      },
+      "required": ["query"]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "function": {
+    "name": "get_message_by_id",
+    "description": "Fetch a single indexed message by its Discord snowflake ID.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "message_id": { "type": "string", "description": "Discord message snowflake ID" }
+      },
+      "required": ["message_id"]
+    }
+  }
+}

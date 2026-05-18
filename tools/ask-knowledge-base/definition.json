@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "function": {
+    "name": "ask_knowledge_base",
+    "description": "Answer a question using guild message history as RAG context. Contains one LLM call for generation.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "question": { "type": "string", "description": "The question to answer" }
+      },
+      "required": ["question"]
+    }
+  }
+}

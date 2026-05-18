@@ -1,0 +1,11 @@
+{
+  "name": "@guildbot/tool-export-mermaid-diagram",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@guildbot/types": "workspace:*",
+    "@guildbot/exporters": "workspace:*",
+    "@guildbot/config": "workspace:*"
+  }
+}

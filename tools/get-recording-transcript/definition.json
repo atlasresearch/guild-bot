@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "function": {
+    "name": "get_recording_transcript",
+    "description": "Read a voice channel recording's VTT transcript from disk.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "recording_id": { "type": "string", "description": "Recording ID (optional — uses latest if omitted)" }
+      },
+      "required": []
+    }
+  }
+}

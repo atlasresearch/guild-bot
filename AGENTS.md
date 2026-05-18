@@ -7,5 +7,3 @@ DO NOT add gates or feature flags for new functionality. All new code must be ac
 When adding new functionality, ensure that it integrates seamlessly with existing features.
 
 NEVER add stubs or placeholders. All functions and methods must have complete implementations.
-
-Always install dependencies with `npm i package@latest` to ensure the latest version is used.

@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "function": {
+    "name": "transcribe_audio",
+    "description": "Download audio/video from a URL and transcribe to VTT using whisper. Supports YouTube and direct URLs.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "description": "URL of the audio or video to transcribe" }
+      },
+      "required": ["url"]
+    }
+  }
+}

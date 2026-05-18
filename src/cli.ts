@@ -9,9 +9,9 @@ import {
   toKumuJSON,
   transcribeAudioFile,
   transcriptToDiagrams
-} from './audioToDiagram'
-import { buildMermaid, exportMermaid } from './exporters/mermaidExporter'
-import { generateCausalRelationships } from './workflows/cld.workflow'
+} from '@guildbot/media'
+import { buildMermaid, exportMermaid } from '@guildbot/exporters'
+import { loadToolHandler } from './tools/discover'
 // audioToDiagram will handle YouTube download+split; whisper is used internally there
 
 async function cmdTranscribe(input: string, output: string) {
@@ -46,18 +46,17 @@ async function cmdDiagram(input: string, output: string) {
   if (!input || !output) throw new Error('Usage: diagram <input.txt> <output.json>')
   if (!fs.existsSync(input)) throw new Error(`Input not found: ${input}`)
   const transcript = await fsp.readFile(input, 'utf8')
-  const response = await generateCausalRelationships(
-    transcript.split('\n').filter((line) => line.trim()),
-    'userPrompt',
-    () => {}
+  const handler = await loadToolHandler('extract-causal-relationships')
+  const result = await handler(
+    { text: transcript.split('\n').filter((line) => line.trim()).join('\n'), prompt: 'userPrompt' },
+    {}
   )
 
-  if ('error' in response) {
-    throw new Error(`Failed to generate causal relationships: ${response.error}`)
+  if (!result.success) {
+    throw new Error(`Failed to generate causal relationships: ${(result.data as any)?.error}`)
   }
 
-  const nodes = response.nodes
-  const relationships = response.relationships
+  const { nodes, relationships } = result.data as any
 
   await fsp.writeFile(output, JSON.stringify({ nodes, relationships }, null, 2), 'utf8')
   console.log('Diagram JSON written to', output)

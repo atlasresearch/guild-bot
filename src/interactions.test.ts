@@ -1,8 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as ragService from './services/rag'
+import * as ragService from '@guildbot/rag'
 
 // Mock dependencies
-vi.mock('./services/rag', () => ({
+vi.mock('@guildbot/rag', () => ({
   search: vi.fn(),
   ask: vi.fn()
 }))

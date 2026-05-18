@@ -1,0 +1,15 @@
+{
+  "type": "function",
+  "function": {
+    "name": "extract_causal_relationships",
+    "description": "Extract causal loop diagram nodes and relationships from text. Returns structured JSON with nodes (drivers, obstacles, actors) and directed relationships with polarity.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string", "description": "Source text to analyse for causal relationships" },
+        "prompt": { "type": "string", "description": "Optional steering prompt to focus the analysis" }
+      },
+      "required": ["text"]
+    }
+  }
+}

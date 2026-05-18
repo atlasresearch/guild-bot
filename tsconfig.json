@@ -10,6 +10,6 @@
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "bundler"
   },
-  "include": ["src", "test", "tests"],
+  "include": ["src", "tools", "modules", "test", "tests"],
   "exclude": ["node_modules", "dist"]
 }

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock messageProcessor
 const mockDeleteMessage = vi.fn()
-vi.mock('./services/messageProcessor', () => ({
+vi.mock('@guildbot/message-processor', () => ({
   deleteMessage: mockDeleteMessage,
   processMessage: vi.fn(),
   syncChannel: vi.fn(),

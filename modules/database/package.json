@@ -1,0 +1,12 @@
+{
+  "name": "@guildbot/database",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@lancedb/lancedb": "^0.23.0"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "type": "function",
+  "function": {
+    "name": "export_mermaid_diagram",
+    "description": "Render CLD nodes and relationships as a Mermaid flowchart diagram (PNG and SVG).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "Array of node objects with label and type"
+        },
+        "relationships": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "Array of relationship objects with subject, object, predicate"
+        }
+      },
+      "required": ["nodes", "relationships"]
+    }
+  }
+}

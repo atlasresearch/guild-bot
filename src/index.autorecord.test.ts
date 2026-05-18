@@ -23,15 +23,13 @@ vi.mock('discord.js', async () => {
 })
 
 // Mock dependencies
-vi.mock('./recording/discord', () => ({
+vi.mock('@guildbot/recording', () => ({
   getActiveRecording: vi.fn(),
   startRecording: vi.fn(),
-  stopRecording: vi.fn()
-}))
-vi.mock('./recording/server', () => ({
+  stopRecording: vi.fn(),
   startTranscriptionServer: vi.fn()
 }))
-vi.mock('./database/db', () => ({
+vi.mock('@guildbot/database', () => ({
   initDB: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('fs/promises', () => ({
@@ -41,7 +39,7 @@ vi.mock('fs/promises', () => ({
   }
 }))
 
-import { getActiveRecording, startRecording, stopRecording } from './recording/discord'
+import { getActiveRecording, startRecording, stopRecording } from '@guildbot/recording'
 
 describe('Auto-Recording Feature', () => {
   let handler: Function

@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import ollama from 'ollama'
-import { DEFAULT_MODEL } from './path'
+import { DEFAULT_MODEL } from '@guildbot/config'
+import { verbose } from '@guildbot/interfaces'
 
 export type AskQuestionContext = {
   sessionId: string
@@ -162,6 +163,7 @@ export async function answerQuestion(options: {
   const sessionDir = options.sessionDir || DEFAULT_SESSION_DIR
   const session = await ensureSession(options.sessionId, sessionDir, options.sourceId)
 
+  verbose('llm:chat answerQuestion', { model, sessionId: session })
   const response = await ollama.chat({
     model,
     messages: [
@@ -173,6 +175,7 @@ export async function answerQuestion(options: {
       { role: 'user', content: `Context:\n${options.context}\n\nUser question: ${options.question}` }
     ]
   })
+  verbose('llm:chat answerQuestion response', response.message?.content?.slice(0, 200))
 
   const answer = response.message?.content ?? ''
   return {

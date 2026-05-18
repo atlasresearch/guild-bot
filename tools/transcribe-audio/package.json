@@ -1,0 +1,11 @@
+{
+  "name": "@guildbot/tool-transcribe-audio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@guildbot/types": "workspace:*",
+    "@guildbot/media": "workspace:*",
+    "@guildbot/config": "workspace:*"
+  }
+}

@@ -15,7 +15,6 @@ import {
 import fs from 'fs/promises'
 import path from 'path'
 import {
-  answerQuestion,
   ASKQUESTION_CONSTANTS,
   cloneAskQuestionContext,
   ensureSession,
@@ -25,15 +24,16 @@ import {
   saveMessageAttachments,
   UNIVERSE
 } from './askQuestion'
-import { audioToTranscript, transcriptToDiagrams } from './audioToDiagram'
-import * as db from './database/db'
-import { CHAT_DIR } from './path'
-import { getActiveRecording, startRecording, stopRecording } from './recording/discord'
-import { startTranscriptionServer } from './recording/server'
-import * as messageProcessor from './services/messageProcessor'
-import * as ragService from './services/rag'
-import { generateMeetingDigest } from './workflows/meetingDigest.workflow'
-import { chooseToolForMention } from './workflows/tools'
+import { audioToTranscript, transcriptToDiagrams } from '@guildbot/media'
+import type { CldGenerator } from '@guildbot/media'
+import * as db from '@guildbot/database'
+import { CHAT_DIR } from '@guildbot/config'
+import { getActiveRecording, startRecording, stopRecording } from '@guildbot/recording'
+import { startTranscriptionServer } from '@guildbot/recording'
+import * as messageProcessor from '@guildbot/message-processor'
+import * as ragService from '@guildbot/rag'
+import { agentLoop } from './agent/loop'
+import { loadToolHandler } from './tools/discover'
 
 const DISCORD_TOKEN: string | undefined = process.env.DISCORD_TOKEN
 const LLM_URL: string | undefined = process.env.LLM_URL
@@ -163,11 +163,11 @@ async function findReferencedMessage(message: Message) {
   return undefined
 }
 
-if (!DISCORD_TOKEN) {
+if (!DISCORD_TOKEN && !process.env.VITEST) {
   console.error('Missing DISCORD_TOKEN in environment')
   process.exit(1)
 }
-if (!LLM_URL) {
+if (!LLM_URL && !process.env.VITEST) {
   console.error('Missing LLM_URL in environment')
   process.exit(1)
 }
@@ -497,14 +497,12 @@ export async function handleInteraction(interaction: Interaction) {
             isContent = true
           }
         } else {
-          // No message argument = Tag the latest message in the channel
-          // This acts as a proxy for "reply" or "context" since Slash Commands don't pass reply references directly
+          // No message argument = Tag the latest non-bot message in the channel
           try {
-            const messages = await chat.channel?.messages.fetch({ limit: 1 })
-            const last = messages?.first()
+            const messages = await chat.channel?.messages.fetch({ limit: 5 })
+            const last = messages?.find((m) => !m.author.bot)
             if (last) {
               targetMessageId = last.id
-              // Ensure it's in our DB?
               await messageProcessor.processDiscordMessage(last)
             }
           } catch (e) {
@@ -622,13 +620,23 @@ export async function handleInteraction(interaction: Interaction) {
       }
 
       const id = await audioToTranscript(UNIVERSE, url, onProgress)
+      const cldGenerator: CldGenerator = async (sentences, prompt) => {
+        const cldHandler = await loadToolHandler('extract-causal-relationships')
+        const cldResult = await cldHandler(
+          { text: sentences.join('\n'), prompt },
+          { guildId: chat.guildId ?? undefined, channelId: chat.channelId, userId: chat.user.id }
+        )
+        if (!cldResult.success) return { error: (cldResult.data as any)?.error ?? 'CLD extraction failed' }
+        return cldResult.data as any
+      }
       const { kumuPath, pngPath } = await transcriptToDiagrams(
         UNIVERSE,
         id,
         undefined,
         userPrompt,
         onProgress,
-        regenerate
+        regenerate,
+        cldGenerator,
       )
       const diagramData = await fs.readFile(kumuPath, 'utf-8')
       const pngData = await fs.readFile(pngPath)
@@ -680,18 +688,15 @@ export async function handleInteraction(interaction: Interaction) {
       }
 
       try {
-        const digest = await generateMeetingDigest(
-          transcriptLines,
-          prompt,
-          async (m) => {
-            try {
-              await chat.editReply({ content: `🔄 ${m}` })
-            } catch {}
-          },
-          undefined,
-          resolved.recordingId,
-          path.join(RECORDINGS_ROOT, 'sessions')
+        const handler = await loadToolHandler('generate-meeting-digest')
+        const result = await handler(
+          { transcript_lines: transcriptLines, prompt },
+          { guildId: chat.guildId ?? undefined, channelId: chat.channelId, userId: chat.user.id }
         )
+        if (!result.success) {
+          return chat.editReply({ content: `Failed to generate meeting digest: ${(result.data as any)?.error ?? 'unknown error'}` })
+        }
+        const digest = result.data
 
         const formatted = formatMeetingDigest(digest)
 
@@ -959,9 +964,9 @@ export async function handleMessage(message: Message) {
       name: threadName,
       autoArchiveDuration: 60
     })
-    reply = await thread.send('Optimizing tool selection...')
+    reply = await thread.send('Thinking...')
   } else {
-    reply = await message.reply('Optimizing tool selection...')
+    reply = await message.reply('Thinking...')
   }
 
   const raw = message.content || ''
@@ -978,12 +983,6 @@ export async function handleMessage(message: Message) {
         sessionDir: ASKQUESTION_CONSTANTS.SESSION_DIR,
         sourceId: session.title || 'text'
       }
-    }
-
-    const onProgress = async (m: string) => {
-      try {
-        await reply.edit(m)
-      } catch {}
     }
 
     const referencedMessage = await findReferencedMessage(message)
@@ -1022,140 +1021,32 @@ export async function handleMessage(message: Message) {
 
     const fullContext = contextParts.join('\n\n')
 
-    // Tool selection
-    // We pass the full context as 'referenced.content' to give the tool chooser full visibility
-    const chooser = await chooseToolForMention({
-      question: question || '(No text, checking attachments)',
-      referenced: {
-        content: fullContext,
-        attachments: []
+    // Route through agent loop — tool selection and dispatch handled by Qwen3.6
+    const answer = await agentLoop({
+      userMessage: fullContext,
+      conversationHistory: [],
+      context: {
+        guildId: message.guildId ?? undefined,
+        channelId: message.channelId,
+        userId: message.author.id,
+        sessionDir: sessionContext.sessionDir,
       },
-      model: ASKQUESTION_CONSTANTS.MODEL
-    })
-
-    const tool = chooser?.tool
-    if (tool && tool !== 'none') {
-      await reply.edit(`Using ${tool} tool...`)
-
-      // Existing tool logic (modified slightly to be robust)
-      if (tool === 'diagram') {
-        const attachment = message.attachments.first()
-        // Use local path if we have it?
-        // Logic for audioToDiagram (which uses a URL/path)
-        const targetUrl = attachment?.url ?? message.content.match(/https?:\/\/\S+/)?.[0]
-        // Fallback to referenced?
-        const refUrl =
-          referencedMessage?.attachments.first()?.url ?? referencedMessage?.content.match(/https?:\/\/\S+/)?.[0]
-
-        const validUrl = targetUrl || refUrl
-
-        if (!validUrl) {
-          await reply.edit('I could not find an audio attachment or URL to generate a diagram from.')
-          return
-        }
-
-        await reply.edit('Generating diagram from the provided audio…')
-        // We use the URL because audioToDiagram likely handles downloading/caching separately or supports URLs
-        console.log('diagram tool using URL:', validUrl, contextParts)
-        const id = await audioToTranscript(UNIVERSE, validUrl, onProgress)
-        const out = await transcriptToDiagrams(UNIVERSE, id, fullContext, question, onProgress, false)
-        const diagramData = await fs.readFile(out.kumuPath, 'utf-8')
-        const pngData = await fs.readFile(out.pngPath)
-        await reply.edit({
-          content: 'Here is your diagram:',
-          files: [
-            new AttachmentBuilder(Buffer.from(diagramData), { name: 'kumu.json' }),
-            new AttachmentBuilder(pngData, { name: 'diagram.png' })
-          ]
-        })
-        return
-      }
-
-      if (tool === 'transcribe') {
-        const attachment = message.attachments.first()
-        const targetUrl =
-          attachment?.url ??
-          message.content.match(/https?:\/\/\S+/)?.[0] ??
-          referencedMessage?.attachments.first()?.url ??
-          referencedMessage?.content.match(/https?:\/\/\S+/)?.[0]
-
-        if (!targetUrl) {
-          await reply.edit('I could not find an audio attachment or URL to transcribe.')
-          return
-        }
-        await reply.edit('Transcribing audio…')
-        try {
-          const id = await audioToTranscript(UNIVERSE, targetUrl, onProgress)
-          const vttPath = path.join(CHAT_DIR, UNIVERSE, id, 'audio.vtt')
-          const vtt = await fs.readFile(vttPath, 'utf-8')
-          if (vtt.length < 1900) {
-            await reply.edit({ content: `Transcript:\n\n${vtt}` })
-          } else {
-            const att = new AttachmentBuilder(Buffer.from(vtt, 'utf-8'), { name: `transcript-${id}.txt` })
-            await reply.edit({ content: 'Transcript generated:', files: [att] })
-          }
-        } catch (e: any) {
-          await reply.edit({ content: `Failed to transcribe: ${e?.message ?? e}` })
-        }
-        return
-      }
-
-      if (tool === 'meeting_summarise') {
-        // Reuse fullContext as transcript lines?
-        // fullContext contains "Referenced Message: ...", "Attachments: ..."
-        // It might not be a clean transcript.
-        // But if the user replied to a transcript, it will be in referencedMessage.content
-
-        const transcriptLines = fullContext
-          .split(/\r?\n/)
-          .map((l) => l.trim())
-          .filter(Boolean)
-
-        if (!transcriptLines.length) {
-          await reply.edit('No transcript text available to summarise.')
-          return
-        }
-        await reply.edit('Generating meeting summary…')
-        try {
-          const digest = await generateMeetingDigest(transcriptLines, undefined, async (m) => {
-            try {
-              await reply.edit(`🔄 ${m}`)
-            } catch {}
-          })
-          const formatted = formatMeetingDigest(digest)
-          if (formatted.length < 2000) {
-            await reply.edit({ content: formatted })
-          } else {
-            const att = new AttachmentBuilder(Buffer.from(formatted, 'utf-8'), {
-              name: `meeting-digest.txt`
-            })
-            await reply.edit({ content: 'Here is the meeting digest:', files: [att] })
-          }
-        } catch (e: any) {
-          await reply.edit({ content: `Failed to generate meeting digest: ${e?.message ?? e}` })
-        }
-        return
-      }
-    }
-
-    await reply.edit('Thinking...')
-
-    const answer = await answerQuestion({
-      context: fullContext,
-      question: question || '(No text question, analysis req)',
-      sessionId: sessionContext.sessionId,
-      sessionDir: sessionContext.sessionDir,
       model: ASKQUESTION_CONSTANTS.MODEL,
-      sourceId: sessionContext.sourceId
+      onProgress: (status) => {
+        reply.edit(status).catch(() => {})
+        if ('sendTyping' in reply.channel) {
+          reply.channel.sendTyping().catch(() => {})
+        }
+      },
     })
 
-    if (answer.answer.length > 2000) {
-      const att = new AttachmentBuilder(Buffer.from(answer.answer, 'utf-8'), {
-        name: `answer-${answer.sessionId}.txt`
+    if (answer.length > 2000) {
+      const att = new AttachmentBuilder(Buffer.from(answer, 'utf-8'), {
+        name: `answer.txt`
       })
       await reply.edit({ content: '', files: [att] })
     } else {
-      await reply.edit({ content: answer.answer })
+      await reply.edit({ content: answer })
     }
   } catch (e) {
     try {

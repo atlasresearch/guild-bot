@@ -1,0 +1,12 @@
+{
+  "name": "@guildbot/tool-export-kumu-json",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@guildbot/types": "workspace:*",
+    "@guildbot/media": "workspace:*",
+    "@guildbot/exporters": "workspace:*",
+    "@guildbot/config": "workspace:*"
+  }
+}

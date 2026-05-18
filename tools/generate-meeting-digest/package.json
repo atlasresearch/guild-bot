@@ -1,0 +1,13 @@
+{
+  "name": "@guildbot/tool-generate-meeting-digest",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@guildbot/types": "workspace:*",
+    "@guildbot/config": "workspace:*",
+    "@guildbot/interfaces": "workspace:*",
+    "ollama": "^0.6.0",
+    "zod": "^4.0.0"
+  }
+}

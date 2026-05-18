@@ -1,0 +1,13 @@
+{
+  "name": "@guildbot/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "app-root-path": "^3.1.0",
+    "dotenv": "^16.3.1"
+  }
+}

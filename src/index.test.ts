@@ -30,30 +30,13 @@ vi.mock('discord.js', async () => {
   }
 })
 
-// 2. Mock ollama (replaces agent-workflow)
-vi.mock('ollama', () => ({
-  default: {
-    chat: vi.fn().mockResolvedValue({ message: { content: 'Mock LLM Answer' } })
-  }
+// 2. Mock the agent loop — replaces the old chooseToolForMention + answerQuestion path
+vi.mock('./agent/loop', () => ({
+  agentLoop: vi.fn().mockResolvedValue('Mock agent response'),
 }))
 
-// 3. Mock Tools Abstraction (Decision Logic)
-vi.mock('./workflows/tools', () => ({
-  chooseToolForMention: vi.fn().mockResolvedValue({ tool: 'none' })
-}))
-
-// 3b. Mock Meeting Digest Workflow (noop replacement)
-vi.mock('./workflows/meetingDigest.workflow', () => ({
-  generateMeetingDigest: vi.fn().mockResolvedValue({
-    insights: [{ summary: 'Mock Insight' }],
-    actionItems: [{ task: 'Mock Action' }],
-    decisions: [{ decision: 'Mock Decision' }],
-    openQuestions: [{ question: 'Mock Question' }]
-  })
-}))
-
-// 4. Mock Audio/Heavy Processing
-vi.mock('./audioToDiagram', () => ({
+// 3. Mock Audio/Heavy Processing
+vi.mock('@guildbot/media', () => ({
   audioToTranscript: vi.fn().mockResolvedValue('mock-recording-id'),
   transcriptToDiagrams: vi.fn().mockResolvedValue({
     kumuPath: '/tmp/kumu.json',
@@ -61,32 +44,31 @@ vi.mock('./audioToDiagram', () => ({
   })
 }))
 
-// 5. Mock Recording (Voice/UDP)
-vi.mock('./recording/discord', () => ({
+// 4. Mock Recording (Voice/UDP)
+vi.mock('@guildbot/recording', () => ({
   getActiveRecording: vi.fn(),
   startRecording: vi.fn(),
-  stopRecording: vi.fn()
-}))
-vi.mock('./recording/server', () => ({
+  stopRecording: vi.fn(),
   startTranscriptionServer: vi.fn()
+}))
+
+// 5. Mock tool handler loading (for slash commands that call handlers directly)
+vi.mock('./tools/discover', () => ({
+  loadToolHandler: vi.fn().mockResolvedValue(
+    vi.fn().mockResolvedValue({ success: true, data: {} })
+  ),
+  discoverToolDefinitions: vi.fn().mockResolvedValue([]),
 }))
 
 // --- Imports ---
 
-import ollama from 'ollama'
-import { ASKQUESTION_CONSTANTS, UNIVERSE } from './askQuestion'
-import * as AudioToDiagram from './audioToDiagram'
+import { agentLoop } from './agent/loop'
+import { ASKQUESTION_CONSTANTS } from './askQuestion'
 import { handleMessage } from './index'
-import * as Tools from './workflows/tools'
 
-// --- Globals & Helpers ---
+// --- Tests ---
 
-// Mock file system for diagrams
-const MOCK_KUMU_PATH = '/tmp/kumu.json'
-const MOCK_PNG_PATH = '/tmp/diagram.png'
-
-describe('handleMessage Features', () => {
-  // Common Mock Objects
+describe('handleMessage', () => {
   let mockReply: any
   let mockMessage: any
   let mockChannel: any
@@ -95,15 +77,9 @@ describe('handleMessage Features', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
 
-    // Setup file system for outputs
     ASKQUESTION_CONSTANTS.SESSION_DIR = TEST_SESSION_DIR
     await fsp.mkdir(TEST_SESSION_DIR, { recursive: true })
 
-    // Create dummy files for diagram tool
-    await fsp.writeFile(MOCK_KUMU_PATH, '{"mock":"kumu"}')
-    await fsp.writeFile(MOCK_PNG_PATH, Buffer.from('mock png'))
-
-    // Setup Discord Object Mocks
     mockReply = {
       edit: vi.fn(),
       delete: vi.fn(),
@@ -120,15 +96,16 @@ describe('handleMessage Features', () => {
 
     mockMessage = {
       id: 'msg-1',
-      author: { bot: false },
+      author: { bot: false, id: 'user-1' },
       system: false,
       content: '<@123456789> hello',
       mentions: { has: vi.fn().mockReturnValue(true) },
       channel: mockChannel,
       channelId: 'channel-id',
+      guildId: 'guild-id',
       reference: null,
       guild: { id: 'guild-id' },
-      attachments: new Map(), // start with Map
+      attachments: new Map(),
       reply: vi.fn().mockResolvedValue(mockReply),
       startThread: vi.fn().mockResolvedValue({
         id: 'thread-id',
@@ -137,14 +114,12 @@ describe('handleMessage Features', () => {
       fetchReference: vi.fn()
     }
 
-    // Add Collection-like methods
     mockMessage.attachments.first = () => {
       const iter = mockMessage.attachments.values()
       const res = iter.next()
       return res.done ? undefined : res.value
     }
 
-    // Mock global fetch
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       headers: new Map(),
@@ -157,7 +132,7 @@ describe('handleMessage Features', () => {
     await fsp.rm(TEST_SESSION_DIR, { recursive: true, force: true }).catch(() => {})
   })
 
-  // --- 1. Entry Conditions ---
+  // --- Entry conditions ---
 
   it('ignores messages from bots', async () => {
     mockMessage.author.bot = true
@@ -178,9 +153,9 @@ describe('handleMessage Features', () => {
     expect(mockMessage.reply).not.toHaveBeenCalled()
   })
 
-  // --- 2. Interaction Mode (Thread vs Reply) ---
+  // --- Thread creation ---
 
-  it('creates a new thread if mentioned in a text channel (not thread, no reply)', async () => {
+  it('creates a new thread if mentioned in a text channel', async () => {
     mockMessage.content = '<@123456789> start a topic'
     await handleMessage(mockMessage)
 
@@ -198,180 +173,71 @@ describe('handleMessage Features', () => {
     await handleMessage(mockMessage)
 
     expect(mockMessage.startThread).not.toHaveBeenCalled()
-    expect(mockMessage.reply).toHaveBeenCalledWith(expect.stringContaining('Optimizing'))
+    expect(mockMessage.reply).toHaveBeenCalledWith('Thinking...')
   })
 
-  it('replies directly if message is a reply to another message', async () => {
-    mockMessage.reference = { messageId: 'ref-msg-id' }
-    mockMessage.fetchReference.mockResolvedValue({
-      id: 'ref-msg-id',
-      content: 'Original question',
-      attachments: new Map(),
-      author: { bot: false }
-    })
-    await handleMessage(mockMessage)
+  // --- Agent loop routing ---
 
-    expect(mockMessage.startThread).not.toHaveBeenCalled()
-    expect(mockMessage.reply).toHaveBeenCalledWith(expect.stringContaining('Optimizing'))
-  })
-
-  // --- 3. Context Gathering & 4. Intelligent Tool Selection ---
-
-  it('gathers context and selects default tool (LLM)', async () => {
-    mockMessage.content = 'What is the meaning of life?'
-
-    vi.mocked(Tools.chooseToolForMention).mockResolvedValue({ tool: 'none' })
+  it('routes @mention to agentLoop and posts response', async () => {
+    vi.mocked(agentLoop).mockResolvedValue('Here is my answer.')
+    mockMessage.content = '<@123456789> what is the meaning of life?'
 
     await handleMessage(mockMessage)
 
-    expect(mockReply.edit).toHaveBeenCalledWith('Thinking...')
-    expect(ollama.chat).toHaveBeenCalled()
-    expect(mockReply.edit).toHaveBeenCalledWith(expect.objectContaining({ content: 'Mock LLM Answer' }))
-  })
-
-  it('handles attachments in context', async () => {
-    const attMap = new Map() as any
-    attMap.set('1', { url: 'http://foo/doc.txt', name: 'doc.txt', contentType: 'text/plain' })
-    mockMessage.attachments = attMap
-
-    await handleMessage(mockMessage)
-
-    // Check if fetch was called.
-    // We check partial match mainly to be safe if environment wraps it
-    expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('http://foo/doc.txt'))
-    expect(ollama.chat).toHaveBeenCalled()
-  })
-
-  // --- 5. Feature Paths (Tools) ---
-
-  describe('Tool: Diagram', () => {
-    it('executes diagram flow when tool="diagram"', async () => {
-      vi.mocked(Tools.chooseToolForMention).mockResolvedValue({ tool: 'diagram' })
-
-      const attMap = new Map() as any
-      attMap.set('1', { url: 'http://foo/audio.mp3', name: 'audio.mp3', contentType: 'audio/mpeg' })
-      mockMessage.attachments = attMap
-      mockMessage.attachments.first = () => attMap.get('1')
-
-      await handleMessage(mockMessage)
-
-      expect(mockReply.edit).toHaveBeenCalledWith('Using diagram tool...')
-      expect(mockReply.edit).toHaveBeenCalledWith('Generating diagram from the provided audio…')
-
-      expect(AudioToDiagram.audioToTranscript).toHaveBeenCalledWith(
-        UNIVERSE,
-        'http://foo/audio.mp3',
-        expect.any(Function)
-      )
-      expect(AudioToDiagram.transcriptToDiagrams).toHaveBeenCalled()
-
-      expect(mockReply.edit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          content: expect.stringContaining('Here is your diagram'),
-          files: expect.arrayContaining([
-            expect.objectContaining({ name: 'kumu.json' }),
-            expect.objectContaining({ name: 'diagram.png' })
-          ])
-        })
-      )
-    })
-
-    it('handles missing audio for diagram tool', async () => {
-      vi.mocked(Tools.chooseToolForMention).mockResolvedValue({ tool: 'diagram' })
-      mockMessage.attachments.first = () => null
-      mockMessage.content = 'make a diagram'
-
-      await handleMessage(mockMessage)
-
-      expect(mockReply.edit).toHaveBeenCalledWith(
-        'I could not find an audio attachment or URL to generate a diagram from.'
-      )
-    })
-  })
-
-  describe('Tool: Transcribe', () => {
-    it('executes transcription flow when tool="transcribe"', async () => {
-      vi.mocked(Tools.chooseToolForMention).mockResolvedValue({ tool: 'transcribe' })
-      mockMessage.content = 'transcribe https://example.com/audio.mp3'
-
-      const mockTranscript = 'This is the transcript text.'
-      // Needs to match CHAT_DIR in path.ts which is .tmp/chat-sessions
-      const vttDir = path.resolve(process.cwd(), '.tmp', 'chat-sessions', UNIVERSE, 'mock-recording-id')
-      await fsp.mkdir(vttDir, { recursive: true })
-      await fsp.writeFile(path.join(vttDir, 'audio.vtt'), mockTranscript)
-
-      await handleMessage(mockMessage)
-
-      expect(mockReply.edit).toHaveBeenCalledWith('Transcribing audio…')
-      expect(AudioToDiagram.audioToTranscript).toHaveBeenCalled()
-      expect(mockReply.edit).toHaveBeenCalledWith({ content: `Transcript:\n\n${mockTranscript}` })
-    })
-  })
-
-  describe('Tool: Meeting Summary', () => {
-    it('executes summary flow when tool="meeting_summarise"', async () => {
-      vi.mocked(Tools.chooseToolForMention).mockResolvedValue({ tool: 'meeting_summarise' })
-
-      mockMessage.reference = { messageId: 'ref-1' }
-      mockMessage.fetchReference.mockResolvedValue({
-        id: 'ref-1',
-        content: 'Speaker: This is the meeting context.',
-        attachments: new Map(),
-        author: { bot: false }
+    expect(agentLoop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: expect.stringContaining('what is the meaning of life'),
+        conversationHistory: [],
+        context: expect.objectContaining({
+          guildId: 'guild-id',
+          channelId: 'channel-id',
+          userId: 'user-1',
+        }),
       })
-
-      await handleMessage(mockMessage)
-
-      expect(mockReply.edit).toHaveBeenCalledWith('Generating meeting summary…')
-      expect(mockReply.edit).toHaveBeenCalledWith(
-        expect.objectContaining({ content: expect.stringContaining('Insights') })
-      )
-      expect(mockReply.edit).toHaveBeenCalledWith(
-        expect.objectContaining({ content: expect.stringContaining('Mock Insight') })
-      )
-    })
+    )
+    expect(mockReply.edit).toHaveBeenCalledWith({ content: 'Here is my answer.' })
   })
 
-  // --- 6. Resilience ---
+  it('sends long answers as file attachments', async () => {
+    const longAnswer = 'A'.repeat(2001)
+    vi.mocked(agentLoop).mockResolvedValue(longAnswer)
 
-  it('handles errors gracefully', async () => {
-    // Force error inside business logic
-    vi.mocked(Tools.chooseToolForMention).mockRejectedValue(new Error('Tool Picker Failed'))
+    await handleMessage(mockMessage)
+
+    expect(mockReply.edit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: '',
+        files: expect.arrayContaining([
+          expect.objectContaining({ name: 'answer.txt' })
+        ])
+      })
+    )
+  })
+
+  it('handles agentLoop errors gracefully', async () => {
+    vi.mocked(agentLoop).mockRejectedValue(new Error('LLM down'))
 
     await handleMessage(mockMessage)
 
     expect(mockReply.edit).toHaveBeenCalledWith(expect.stringContaining('Error processing your question'))
+    expect(mockReply.edit).toHaveBeenCalledWith(expect.stringContaining('LLM down'))
   })
 
-  it('extracts URL from referenced message content for transcription', async () => {
-    vi.mocked(Tools.chooseToolForMention).mockResolvedValue({ tool: 'transcribe' })
-
-    // Current message has no URL/Attachment
-    mockMessage.content = 'transcribe this'
-
-    // Referenced message has a URL in content
-    const refUrl = 'https://example.com/audio.mp3'
-    const refAttachments = new Map()
-    ;(refAttachments as any).first = () => undefined
-
+  it('gathers referenced message content into context', async () => {
     mockMessage.reference = { messageId: 'ref-msg-id' }
     mockMessage.fetchReference.mockResolvedValue({
       id: 'ref-msg-id',
-      content: `Check this out: ${refUrl}`,
-      attachments: refAttachments,
+      content: 'Original question about testing',
+      attachments: new Map(),
       author: { bot: false }
     })
 
-    // Setup transcript file expectation
-    const vttDir = path.resolve(process.cwd(), '.tmp', 'chat-sessions', UNIVERSE, 'mock-recording-id')
-    await fsp.mkdir(vttDir, { recursive: true })
-    await fsp.writeFile(path.join(vttDir, 'audio.vtt'), 'Mock transcript')
-
     await handleMessage(mockMessage)
 
-    // Expected flow
-    expect(mockReply.edit).toHaveBeenCalledWith('Transcribing audio…')
-    // Ensure the URL was passed to audioToTranscript
-    expect(AudioToDiagram.audioToTranscript).toHaveBeenCalledWith(expect.any(String), refUrl, expect.any(Function))
+    expect(agentLoop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: expect.stringContaining('Original question about testing'),
+      })
+    )
   })
 })

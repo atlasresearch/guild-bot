@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "function": {
+    "name": "download_youtube",
+    "description": "Download YouTube audio and metadata without transcription.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "description": "YouTube video URL" }
+      },
+      "required": ["url"]
+    }
+  }
+}

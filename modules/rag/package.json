@@ -1,0 +1,16 @@
+{
+  "name": "@guildbot/rag",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@guildbot/config": "workspace:*",
+    "@guildbot/database": "workspace:*",
+    "@guildbot/embedding": "workspace:*",
+    "@guildbot/interfaces": "workspace:*",
+    "ollama": "^0.6.0"
+  }
+}

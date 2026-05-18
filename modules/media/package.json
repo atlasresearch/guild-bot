@@ -1,0 +1,14 @@
+{
+  "name": "@guildbot/media",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@guildbot/config": "workspace:*",
+    "@guildbot/exporters": "workspace:*",
+    "@guildbot/interfaces": "workspace:*"
+  }
+}

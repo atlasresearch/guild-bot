@@ -1,0 +1,17 @@
+{
+  "name": "@guildbot/recording",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@guildbot/interfaces": "workspace:*",
+    "@discordjs/voice": "^0.19.0",
+    "discord.js": "^14.13.0",
+    "msgpackr": "^1.11.5",
+    "opusscript": "^0.0.8",
+    "ws": "^8.18.3"
+  }
+}

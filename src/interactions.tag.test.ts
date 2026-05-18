@@ -1,13 +1,13 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as messageProcessor from './services/messageProcessor'
+import * as messageProcessor from '@guildbot/message-processor'
 
 // Mock dependencies
-vi.mock('./services/rag', () => ({
+vi.mock('@guildbot/rag', () => ({
   search: vi.fn(),
   ask: vi.fn()
 }))
 
-vi.mock('./services/messageProcessor', () => ({
+vi.mock('@guildbot/message-processor', () => ({
   addTags: vi.fn(),
   removeTags: vi.fn(),
   processMessage: vi.fn(),
@@ -47,7 +47,8 @@ describe('handleInteraction - Tagging', () => {
     handleInteraction = index.handleInteraction
 
     mockFetchedMessages = {
-      first: vi.fn()
+      first: vi.fn(),
+      find: vi.fn(),
     }
 
     mockChannel = {
@@ -85,14 +86,14 @@ describe('handleInteraction - Tagging', () => {
   })
 
   it('should tag the latest message if no message identifier is provided', async () => {
-    // Setup last message
-    const lastMessage = { id: 'msg-latest', content: 'Last message' }
-    mockFetchedMessages.first.mockReturnValue(lastMessage)
+    // Setup last message (non-bot)
+    const lastMessage = { id: 'msg-latest', content: 'Last message', author: { bot: false } }
+    mockFetchedMessages.find.mockImplementation((fn: any) => fn(lastMessage) ? lastMessage : undefined)
 
     await handleInteraction(mockInteraction)
 
     // Verify it fetched the channel messages
-    expect(mockInteraction.channel.messages.fetch).toHaveBeenCalledWith({ limit: 1 })
+    expect(mockInteraction.channel.messages.fetch).toHaveBeenCalledWith({ limit: 5 })
 
     // Verify it ensured the message is processed
     expect(messageProcessor.processDiscordMessage).toHaveBeenCalledWith(lastMessage)
@@ -139,8 +140,8 @@ describe('handleInteraction - Tagging', () => {
   })
 
   it('should support removing tags', async () => {
-    const lastMessage = { id: 'msg-latest' }
-    mockFetchedMessages.first.mockReturnValue(lastMessage)
+    const lastMessage = { id: 'msg-latest', author: { bot: false } }
+    mockFetchedMessages.find.mockImplementation((fn: any) => fn(lastMessage) ? lastMessage : undefined)
 
     mockInteraction.options.getBoolean.mockReturnValue(true) // remove = true
 
