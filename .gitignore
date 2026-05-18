@@ -11,4 +11,3 @@ package-lock.json
 .sessions/
 .lancedb_*
 .lancedb
-.opencode
