@@ -27,7 +27,6 @@ import {
 import { audioToTranscript, transcriptToDiagrams } from '@guildbot/media'
 import type { CldGenerator } from '@guildbot/media'
 import * as db from '@guildbot/database'
-import { CHAT_DIR } from '@guildbot/config'
 import { getActiveRecording, startRecording, stopRecording } from '@guildbot/recording'
 import { startTranscriptionServer } from '@guildbot/recording'
 import * as messageProcessor from '@guildbot/message-processor'

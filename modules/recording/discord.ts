@@ -8,7 +8,7 @@ import {
 import type { VoiceBasedChannel } from 'discord.js'
 import { encode } from 'msgpackr'
 import type { Readable } from 'node:stream'
-import OpusScript from 'opusscript'
+import { OpusEncoder } from '@discordjs/opus'
 import WebSocket from 'ws'
 import { debug } from '@guildbot/interfaces'
 
@@ -98,7 +98,7 @@ export async function startRecording(
     })
 
     const receiver = conn.receiver
-    const decoders = new Map<string, OpusScript>()
+    const decoders = new Map<string, OpusEncoder>()
     const streams = new Map<string, Readable>()
     const userNames = new Map<string, string>()
     // nickname handling
@@ -183,7 +183,7 @@ export async function startRecording(
       } catch {
         debug(`Failed to fetch member name for userId: ${userId}`)
       }
-      const decoder = new OpusScript(48000, 2)
+      const decoder = new OpusEncoder(48000, 2)
       decoders.set(userId, decoder)
       streams.set(userId, opusStream as unknown as Readable)
       opusStream
