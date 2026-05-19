@@ -1,9 +1,11 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { TOOLS_DIR } from '@guildbot/config'
 import type { Tool } from 'ollama'
 import type { ToolHandler } from './types'
 
-const DEFAULT_TOOLS_DIR = join(import.meta.dirname, '..', '..', 'tools')
+// default to the environment's tools dir (seeded from codebase on first run)
+const DEFAULT_TOOLS_DIR = TOOLS_DIR
 
 // Read all tools/<name>/definition.json and return Ollama Tool[]
 export async function discoverToolDefinitions(toolsDir = DEFAULT_TOOLS_DIR): Promise<Tool[]> {

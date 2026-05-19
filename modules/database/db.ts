@@ -1,21 +1,17 @@
-// src/database/db.ts
 import * as lancedb from '@lancedb/lancedb'
+import { DB_DIR } from '@guildbot/config'
 import fs from 'fs'
-import path from 'path'
 import { IDBSchema } from './schema'
 
 let dbInstance: lancedb.Connection | null = null
 let dbPath: string = ''
 
-export const initDB = async (env: string = process.env.NODE_ENV || 'development') => {
-  const basePath = process.cwd()
-  let relativePath = '.lancedb'
-
-  if (env === 'test') relativePath = `.lancedb_test${process.env.VITEST_POOL_ID || ''}`
-  if (env === 'production') relativePath = '.lancedb_prod'
-  if (process.env.DB_PATH) relativePath = process.env.DB_PATH
-
-  dbPath = path.join(basePath, relativePath)
+/**
+ * Initialise the LanceDB connection.
+ * @param dbPathOverride  - explicit path for tests; defaults to DB_DIR from config (R4.1, R5.3)
+ */
+export const initDB = async (dbPathOverride?: string) => {
+  dbPath = dbPathOverride ?? DB_DIR
 
   if (!fs.existsSync(dbPath)) {
     fs.mkdirSync(dbPath, { recursive: true })
@@ -124,4 +120,5 @@ export const dropDB = async () => {
     fs.rmSync(dbPath, { recursive: true, force: true })
   }
   dbInstance = null
+  dbPath = ''
 }

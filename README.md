@@ -21,4 +21,4 @@ GuildBot is a TypeScript toolkit that turns Discord conversations and audio into
 - `src/index.ts`: Discord bot entrypoint and transcription WebSocket server.
 - `src/audioToDiagram.ts` and `src/cld/`: audio download/transcription, causal extraction, and graph/diagram exporters.
 - `ui/server` and `ui/web`: minimal UI to import, monitor, and browse graphs.
-- CLI: `npx guildbot transcribe|diagram|kumu|mermaid` for standalone use.
+- CLI: `pnpx guildbot transcribe|diagram|kumu|mermaid` for standalone use.

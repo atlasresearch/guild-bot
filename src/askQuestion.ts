@@ -1,10 +1,9 @@
-import appRootPath from 'app-root-path'
 import { randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import ollama from 'ollama'
-import { DEFAULT_MODEL } from '@guildbot/config'
+import { CONTEXT_DIR, DEFAULT_MODEL, SESSIONS_DIR } from '@guildbot/config'
 import { verbose } from '@guildbot/interfaces'
+import ollama from 'ollama'
 
 export type AskQuestionContext = {
   sessionId: string
@@ -19,10 +18,7 @@ export type AttachmentSummary = {
   size: number
 }
 
-export const UNIVERSE = process.env.UNIVERSE || 'discord-dev'
-const DEFAULT_SESSION_DIR = path.resolve(appRootPath.path, '.tmp', `${UNIVERSE}-sessions`)
-const CONTEXT_DIR = path.join(DEFAULT_SESSION_DIR, 'context')
-
+// R2.5: single definition — SESSIONS_DIR and CONTEXT_DIR come from @guildbot/config
 const contextPathFor = (key: string) => path.join(CONTEXT_DIR, `${key}.json`)
 
 type SessionMeta = { id: string; title?: string; createdAt: string }
@@ -45,7 +41,7 @@ async function writeSessionMeta(sessionDir: string, meta: SessionMeta) {
 /**
  * Ensure a session exists, creating it if necessary.
  */
-export async function ensureSession(sessionId?: string, sessionDir = DEFAULT_SESSION_DIR, name?: string) {
+export async function ensureSession(sessionId?: string, sessionDir = SESSIONS_DIR, name?: string) {
   await fsp.mkdir(sessionDir, { recursive: true })
   if (sessionId) {
     const existing = await readSessionMeta(sessionDir, sessionId)
@@ -61,11 +57,6 @@ export async function ensureSession(sessionId?: string, sessionDir = DEFAULT_SES
 
 /**
  * Save message attachments to session directory.
- * @param sessionDir
- * @param sessionId
- * @param messageId
- * @param attachments
- * @returns
  */
 export async function saveMessageAttachments(
   sessionDir: string,
@@ -116,7 +107,6 @@ export async function formatAttachmentsForPrompt(attachments: AttachmentSummary[
   const parts = ['Attachments provided:']
   for (const att of attachments) {
     let extra = ''
-    // If it's a text file (and reasonable size), inline it
     const isText =
       att.contentType.startsWith('text/') ||
       ['.txt', '.md', '.json', '.xml', '.yml', '.yaml', '.log', '.csv', '.ts', '.js', '.py'].some((ext) =>
@@ -124,7 +114,6 @@ export async function formatAttachmentsForPrompt(attachments: AttachmentSummary[
       )
 
     if (isText && att.size < 50 * 1024) {
-      // 50KB limit for inlining
       try {
         const content = await fsp.readFile(att.storedPath, 'utf8')
         extra = `\nContent:\n\`\`\`\n${content}\n\`\`\``
@@ -160,7 +149,7 @@ export async function answerQuestion(options: {
   sourceId?: string
 }) {
   const model = options.model || DEFAULT_MODEL
-  const sessionDir = options.sessionDir || DEFAULT_SESSION_DIR
+  const sessionDir = options.sessionDir || SESSIONS_DIR
   const session = await ensureSession(options.sessionId, sessionDir, options.sourceId)
 
   verbose('llm:chat answerQuestion', { model, sessionId: session })
@@ -205,6 +194,5 @@ export async function cloneAskQuestionContext(fromKey: string | undefined, toKey
 
 export const ASKQUESTION_CONSTANTS = {
   MODEL: DEFAULT_MODEL,
-  UNIVERSE: UNIVERSE,
-  SESSION_DIR: DEFAULT_SESSION_DIR
+  SESSION_DIR: SESSIONS_DIR
 }

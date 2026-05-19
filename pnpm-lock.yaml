@@ -165,9 +165,6 @@ importers:
 
   modules/config:
     dependencies:
-      app-root-path:
-        specifier: ^3.1.0
-        version: 3.1.0
       dotenv:
         specifier: ^16.3.1
         version: 16.6.1

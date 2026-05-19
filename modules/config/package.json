@@ -7,7 +7,6 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "app-root-path": "^3.1.0",
     "dotenv": "^16.3.1"
   }
 }

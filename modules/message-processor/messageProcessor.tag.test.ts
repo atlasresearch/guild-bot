@@ -1,8 +1,12 @@
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import * as db from '@guildbot/database'
 import type { IDBSchema } from '@guildbot/database'
 import * as processor from './messageProcessor'
 
+// R5.1, R5.2: use a temporary directory per test run
 describe('Message Processor Tagging', () => {
   const testRecord: IDBSchema = {
     id: 'msg_to_tag',
@@ -17,7 +21,8 @@ describe('Message Processor Tagging', () => {
   }
 
   beforeEach(async () => {
-    await db.initDB('test')
+    const tmpDir = await mkdtemp(join(tmpdir(), 'guildbot-mp-tag-test-'))
+    await db.initDB(join(tmpDir, 'db'))
     await db.upsert(testRecord)
   })
 
@@ -26,7 +31,6 @@ describe('Message Processor Tagging', () => {
   })
 
   it('should add new tags to existing message', async () => {
-    // @ts-ignore
     await processor.addTags('msg_to_tag', ['new', 'fancy'])
 
     const msg = await db.getMessage('msg_to_tag')
@@ -37,7 +41,6 @@ describe('Message Processor Tagging', () => {
   })
 
   it('should not add duplicate tags', async () => {
-    // @ts-ignore
     await processor.addTags('msg_to_tag', ['original', 'new'])
 
     const msg = await db.getMessage('msg_to_tag')
@@ -47,17 +50,14 @@ describe('Message Processor Tagging', () => {
   })
 
   it('should throw error if message not found', async () => {
-    // @ts-ignore
     await expect(processor.addTags('non_existent', ['tag'])).rejects.toThrow('Message not found')
   })
 
   it('should remove tags from existing message', async () => {
-    // Setup message with tags
     const id = 'msg_to_untag'
     const record = { ...testRecord, id, tags: ['keep', 'remove_me'] }
     await db.upsert(record)
 
-    // @ts-ignore
     await processor.removeTags(id, ['remove_me'])
 
     const msg = await db.getMessage(id)
@@ -71,7 +71,6 @@ describe('Message Processor Tagging', () => {
     const record = { ...testRecord, id, tags: ['keep'] }
     await db.upsert(record)
 
-    // @ts-ignore
     await processor.removeTags(id, ['not_there'])
 
     const msg = await db.getMessage(id)

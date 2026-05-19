@@ -4,12 +4,15 @@
   "description": "Minimal Discord bot that sends JSON prompts to an LLM via HTTP and returns JSON responses (TypeScript)",
   "main": "dist/index.js",
   "scripts": {
-    "start": "NODE_ENV=production tsx src/index.ts",
+    "start": "GUILDBOT_ENV=prod NODE_ENV=production tsx src/index.ts",
     "format": "prettier --write .",
-    "dev": "NODE_ENV=development tsx watch src/index.ts",
+    "dev": "GUILDBOT_ENV=dev NODE_ENV=development tsx watch src/index.ts",
     "lint": "tsc --noEmit && eslint . --ext .ts",
     "eslint:fix": "eslint . --ext .ts --fix",
-    "test": "NODE_ENV=test vitest run",
+    "test": "vitest run",
+    "init": "tsx src/cli.ts init",
+    "sync": "tsx src/cli.ts sync",
+    "migrate": "tsx src/cli.ts migrate",
     "ui:server": "tsx watch ui/server/index.ts",
     "ui:web": "vite --config ui/web/vite.config.ts",
     "ui:dev": "concurrently -k -n server,web -c green,cyan \"pnpm:ui:server\" \"pnpm:ui:web\""

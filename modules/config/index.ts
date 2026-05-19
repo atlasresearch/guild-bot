@@ -1,6 +1,12 @@
-export { DEFAULT_MODEL, CHAT_DIR, DEFAULT_SESSION_DIR } from './path'
-
-export const UNIVERSE = process.env.UNIVERSE || 'discord-dev'
-
-import appRootPath from 'app-root-path'
-export const ROOT_DIR = appRootPath.toString()
+export { ENV_DIR, ENV_NAME, ensureEnvironment, syncEnvironment } from './env'
+export {
+  DB_DIR,
+  RECORDINGS_DIR,
+  SESSIONS_DIR,
+  CONTEXT_DIR,
+  MEDIA_DIR,
+  EXPORTS_DIR,
+  TOOLS_DIR,
+  SKILLS_DIR,
+  DEFAULT_MODEL
+} from './path'

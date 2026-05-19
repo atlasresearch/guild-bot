@@ -13,7 +13,8 @@ import {
 } from 'discord.js'
 
 import fs from 'fs/promises'
-import path from 'path'
+import { join } from 'node:path'
+import { RECORDINGS_DIR, ensureEnvironment } from '@guildbot/config'
 import {
   ASKQUESTION_CONSTANTS,
   cloneAskQuestionContext,
@@ -21,8 +22,7 @@ import {
   formatAttachmentsForPrompt,
   getAskQuestionContext,
   rememberAskQuestionContext,
-  saveMessageAttachments,
-  UNIVERSE
+  saveMessageAttachments
 } from './askQuestion'
 import { audioToTranscript, transcriptToDiagrams } from '@guildbot/media'
 import type { CldGenerator } from '@guildbot/media'
@@ -34,17 +34,22 @@ import * as ragService from '@guildbot/rag'
 import { agentLoop } from './agent/loop'
 import { loadToolHandler } from './tools/discover'
 
+// R1.2, R3.1: seed environment directory on startup (tools, skills, data dirs, .env)
+ensureEnvironment(join(import.meta.dirname, '..'))
+
 const DISCORD_TOKEN: string | undefined = process.env.DISCORD_TOKEN
 const LLM_URL: string | undefined = process.env.LLM_URL
 const ALWAYS_RECORDING_CHANNEL_ID: string | undefined = process.env.ALWAYS_RECORDING_CHANNEL_ID
-const RECORDINGS_ROOT = path.resolve(process.cwd(), '.tmp', 'recordings')
 
-// Knowledge Base Services - Init
-db.initDB(process.env.NODE_ENV).catch(console.error)
+// R4.8: use RECORDINGS_DIR from config (R4.1)
+const RECORDINGS_ROOT = RECORDINGS_DIR
+
+// R4.1: initDB with no arg defaults to DB_DIR from config
+db.initDB().catch(console.error)
 
 const findRecordingById = async (recordingId?: string) => {
   if (!recordingId) return undefined
-  const vttPath = path.join(RECORDINGS_ROOT, recordingId, 'audio.vtt')
+  const vttPath = join(RECORDINGS_ROOT, recordingId, 'audio.vtt')
   try {
     await fs.stat(vttPath)
     return { recordingId, vttPath }
@@ -355,7 +360,7 @@ client.once('ready', async () => {
             if (!dir.isDirectory()) continue
             const recordingId = dir.name
             const channelId = recordingId.split('-')[0] // Assuming CHANNELID-TIMESTAMP format
-            const vttPath = path.join(RECORDINGS_ROOT, recordingId, 'audio.vtt')
+            const vttPath = join(RECORDINGS_ROOT, recordingId, 'audio.vtt')
 
             try {
               await fs.stat(vttPath)
@@ -618,7 +623,7 @@ export async function handleInteraction(interaction: Interaction) {
         }
       }
 
-      const id = await audioToTranscript(UNIVERSE, url, onProgress)
+      const id = await audioToTranscript(url, onProgress)
       const cldGenerator: CldGenerator = async (sentences, prompt) => {
         const cldHandler = await loadToolHandler('extract-causal-relationships')
         const cldResult = await cldHandler(
@@ -629,7 +634,6 @@ export async function handleInteraction(interaction: Interaction) {
         return cldResult.data as any
       }
       const { kumuPath, pngPath } = await transcriptToDiagrams(
-        UNIVERSE,
         id,
         undefined,
         userPrompt,

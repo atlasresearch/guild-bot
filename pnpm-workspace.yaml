@@ -4,5 +4,5 @@ packages:
 allowBuilds:
   '@discordjs/opus': true
   esbuild: true
-  msgpackr-extract: set this to true or false
-  puppeteer: set this to true or false
+  msgpackr-extract: false
+  puppeteer: false

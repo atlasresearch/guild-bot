@@ -17,6 +17,7 @@ describe('transcribe-audio handler', () => {
     const { audioToTranscript } = await import('@guildbot/media')
     const onProgress = vi.fn()
     await handler({ url: 'https://yt.com/watch?v=123' }, { onProgress })
-    expect(audioToTranscript).toHaveBeenCalledWith(expect.any(String), 'https://yt.com/watch?v=123', onProgress)
+    // R4.5 (media): audioToTranscript(url, onProgress) — no universe param
+    expect(audioToTranscript).toHaveBeenCalledWith('https://yt.com/watch?v=123', onProgress)
   })
 })

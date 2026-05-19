@@ -1,8 +1,11 @@
-// src/database/db.test.ts
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import * as db from './db'
 import { IDBSchema } from './schema'
 
+// R5.1, R5.2: tests use a temporary directory, never ~/.guildbot-*
 describe('Database', () => {
   const testRecord: IDBSchema = {
     id: 'msg_1',
@@ -13,11 +16,12 @@ describe('Database', () => {
     timestamp: Date.now(),
     metadata: '{}',
     tags: ['short'],
-    vector: Array(768).fill(0.1) // Assuming 768 dim
+    vector: Array(768).fill(0.1)
   }
 
   beforeEach(async () => {
-    await db.initDB('test')
+    const tmpDir = await mkdtemp(join(tmpdir(), 'guildbot-db-test-'))
+    await db.initDB(join(tmpDir, 'db'))
   })
 
   afterEach(async () => {
@@ -27,7 +31,6 @@ describe('Database', () => {
   it('should create table and insert record', async () => {
     await db.upsert(testRecord)
 
-    // Check via public API
     const results = await db.getSince('chan_1', 0)
     expect(results.length).toBe(1)
   })
@@ -45,7 +48,6 @@ describe('Database', () => {
 
   it('should search by vector', async () => {
     await db.upsert(testRecord)
-    // Exact match vector search should find it
     const results = await db.searchVector(testRecord.vector, 1)
     expect(results.length).toBe(1)
     expect(results[0].id).toBe(testRecord.id)

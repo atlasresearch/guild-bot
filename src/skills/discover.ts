@@ -1,7 +1,9 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { SKILLS_DIR } from '@guildbot/config'
 
-const DEFAULT_SKILLS_DIR = join(import.meta.dirname, '..', '..', 'skills')
+// R4.3, R6.2: default to the environment's skills dir (seeded from codebase on first run)
+const DEFAULT_SKILLS_DIR = SKILLS_DIR
 
 export type SkillMeta = { name: string; description: string }
 

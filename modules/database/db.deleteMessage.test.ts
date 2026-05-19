@@ -1,7 +1,11 @@
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import * as db from './db'
 import { IDBSchema } from './schema'
 
+// R5.1, R5.2: tests use a temporary directory, never ~/.guildbot-*
 describe('Database deleteMessage', () => {
   const testRecord: IDBSchema = {
     id: 'msg_to_delete',
@@ -16,7 +20,8 @@ describe('Database deleteMessage', () => {
   }
 
   beforeEach(async () => {
-    await db.initDB('test')
+    const tmpDir = await mkdtemp(join(tmpdir(), 'guildbot-db-del-test-'))
+    await db.initDB(join(tmpDir, 'db'))
     await db.upsert(testRecord)
   })
 
@@ -25,20 +30,16 @@ describe('Database deleteMessage', () => {
   })
 
   it('should delete a message by id', async () => {
-    // Verify it exists
     const before = await db.getMessage('msg_to_delete')
     expect(before).toBeDefined()
 
-    // @ts-ignore - function to be implemented
     await db.deleteMessage('msg_to_delete')
 
-    // Verify it is gone
     const after = await db.getMessage('msg_to_delete')
     expect(after).toBeNull()
   })
 
   it('should be idempotent (deleting non-existent message is fine)', async () => {
-    // @ts-ignore
     await db.deleteMessage('msg_non_existent')
   })
 })

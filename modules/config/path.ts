@@ -1,19 +1,14 @@
-import appRootPath from 'app-root-path'
-import dotenv from 'dotenv'
-import path from 'path'
+import { join } from 'node:path'
+import { ENV_DIR } from './env'
 
-// use .env.dev in dev mode, .env.prod in production
-if (process.env.NODE_ENV === 'development') {
-  dotenv.config({ path: '.env.dev' })
-  console.log('Loaded development .env.dev file')
-} else if (process.env.NODE_ENV === 'test') {
-  dotenv.config({ path: '.env.test' })
-  console.log('Loaded test .env.test file')
-} else {
-  dotenv.config({ path: '.env.prod' })
-  console.log('Loaded production .env.prod file')
-}
+// All runtime state lives under ENV_DIR (~/.guildbot-<env>/)  (R1.1, R2.1)
+export const DB_DIR         = join(ENV_DIR, 'db')
+export const RECORDINGS_DIR = join(ENV_DIR, 'recordings')
+export const SESSIONS_DIR   = join(ENV_DIR, 'sessions')
+export const CONTEXT_DIR    = join(ENV_DIR, 'sessions', 'context')
+export const MEDIA_DIR      = join(ENV_DIR, 'media')
+export const EXPORTS_DIR    = join(ENV_DIR, 'exports')
+export const TOOLS_DIR      = join(ENV_DIR, 'tools')
+export const SKILLS_DIR     = join(ENV_DIR, 'skills')
 
-export const CHAT_DIR = path.resolve(appRootPath.path, '.tmp', 'chat-sessions')
-export const DEFAULT_MODEL = process.env.DEFAULT_MODEL!
-export const DEFAULT_SESSION_DIR = path.resolve(appRootPath.path, '.tmp', 'tools-sessions')
+export const DEFAULT_MODEL  = process.env.DEFAULT_MODEL!

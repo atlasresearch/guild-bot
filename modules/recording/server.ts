@@ -4,6 +4,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { WebSocket, WebSocketServer } from 'ws'
+import { RECORDINGS_DIR } from '@guildbot/config'
 import { ensureWhisperAvailable, transcribeWithWhisper } from '@guildbot/interfaces'
 
 type UserState = {
@@ -268,7 +269,7 @@ function takeBytes(buf: Buffer, count: number): { head: Buffer; tail: Buffer } {
 async function handlePcm(recId: string, rate: number, channels: number, pcm: Buffer, userId: string) {
   let sess = SESSIONS.get(recId)
   if (!sess) {
-    const dir = path.resolve(process.cwd(), '.tmp', 'recordings', recId)
+    const dir = path.join(RECORDINGS_DIR, recId)
     ensureDir(dir)
     const vttPath = path.join(dir, 'audio.vtt')
     const includeAudio = SESSION_PREFS.get(recId)?.includeAudio ?? false
