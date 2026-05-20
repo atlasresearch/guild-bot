@@ -105,6 +105,8 @@ describe('handleMessage', () => {
       isThread: () => false,
       sendTyping: vi.fn(),
       id: 'channel-id',
+      // ChannelType.GuildText = 0 — required so the thread-creation gate passes
+      type: 0,
       fetchStarterMessage: vi.fn(),
       send: vi.fn().mockResolvedValue(mockReply)
     }

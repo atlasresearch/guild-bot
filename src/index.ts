@@ -2,6 +2,7 @@ import {
   ApplicationCommandDataResolvable,
   ApplicationCommandOptionType,
   AttachmentBuilder,
+  ChannelType,
   ChatInputCommandInteraction,
   Client,
   GatewayIntentBits,
@@ -955,6 +956,17 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 client.on('interactionCreate', handleInteraction)
 
 export async function handleMessage(message: Message) {
+  try {
+    await handleMessageInner(message)
+  } catch (err) {
+    // Any error reaching this point is an unhandled exception in the dispatch
+    // path. Discord.js routes those to the Client's 'error' event which has no
+    // default listener and crashes the process. Catch + log instead.
+    console.error('[handleMessage] unhandled error:', err)
+  }
+}
+
+async function handleMessageInner(message: Message) {
   if (message.author.bot || message.system) return
 
   const botId = client.user?.id
@@ -971,17 +983,34 @@ export async function handleMessage(message: Message) {
     console.warn('Failed to send typing indicator', e)
   }
 
+  // Thread creation is only valid in text + announcement channels. Voice-channel
+  // text chat, stage channels, forums, and DMs all reject startThread() with
+  // DiscordjsError [MessageThreadParent].
+  const channelType = message.channel.type
+  const channelSupportsThreads =
+    channelType === ChannelType.GuildText || channelType === ChannelType.GuildAnnouncement
+
   let reply: Message
-  const shouldCreateThread = isMention && !message.reference && !message.channel.isThread?.() && message.guild
+  const shouldCreateThread =
+    isMention &&
+    !message.reference &&
+    !message.channel.isThread?.() &&
+    message.guild &&
+    channelSupportsThreads
 
   if (shouldCreateThread) {
     const rawContent = message.content.replace(/<@!?[0-9]+>/g, '').trim()
     const threadName = rawContent.substring(0, 50) || 'Thread'
-    const thread = await message.startThread({
-      name: threadName,
-      autoArchiveDuration: 60
-    })
-    reply = await thread.send('Thinking...')
+    try {
+      const thread = await message.startThread({
+        name: threadName,
+        autoArchiveDuration: 60
+      })
+      reply = await thread.send('Thinking...')
+    } catch (e) {
+      console.warn('Failed to start thread, falling back to inline reply', e)
+      reply = await message.reply('Thinking...')
+    }
   } else {
     reply = await message.reply('Thinking...')
   }
