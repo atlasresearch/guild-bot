@@ -35,10 +35,12 @@ import { loadToolHandler } from './tools/discover'
 
 // Resolve the active guild dir and ensure it is seeded (data subdirs, tools, skills,
 // prompt.md, memory.md). config.json + secrets.json must already exist; the loader
-// fails loudly otherwise.
+// fails loudly otherwise. initGuildDir resyncs tools/ + skills/ from the codebase
+// on every startup so the per-guild copies stay current with code changes.
 const GUILD_DIR = resolveGuildDir()
 if (!process.env.VITEST) {
   initGuildDir(GUILD_DIR, { codebaseRoot: join(import.meta.dirname, '..') })
+  console.log(`[startup] resynced tools/ + skills/ from codebase into ${GUILD_DIR}`)
 }
 
 // initial config read — logs startup-only fields and surfaces validation errors early

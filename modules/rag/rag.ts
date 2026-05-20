@@ -1,9 +1,7 @@
-// src/services/rag.ts
-import ollama from 'ollama'
+// RAG: semantic search + LLM Q&A over the indexed message store.
+import { chat } from '@guildbot/llm'
 import * as db from '@guildbot/database'
-import { loadConfig } from '@guildbot/guild-config'
 import { getEmbedding } from '@guildbot/embedding'
-import { verbose } from '@guildbot/interfaces'
 
 export const search = async (guildId: string, query: string, limit: number = 5) => {
   const queryVector = await getEmbedding(query)
@@ -14,7 +12,6 @@ export const search = async (guildId: string, query: string, limit: number = 5) 
 }
 
 export const ask = async (guildId: string, question: string, model?: string) => {
-  const usedModel = model ?? loadConfig().llm.models.default
   const results = await search(guildId, question, 10)
 
   let context = 'Here are some relevant messages from the history:\n'
@@ -24,13 +21,9 @@ export const ask = async (guildId: string, question: string, model?: string) => 
 
   const prompt = `Context:\n${context}\n\nQuestion: ${question}\n\nAnswer the question based on the context provided.`
 
-  verbose('llm:generate rag.ask', { model: usedModel, promptLength: prompt.length })
-  const response = await ollama.generate({
-    model: usedModel,
-    prompt: prompt,
-    stream: false
+  const response = await chat({
+    model,
+    messages: [{ role: 'user', content: prompt }],
   })
-  verbose('llm:generate rag.ask response', response.response.slice(0, 200))
-
-  return response.response
+  return response.content
 }

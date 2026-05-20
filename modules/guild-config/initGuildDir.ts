@@ -1,4 +1,4 @@
-import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DATA_SUBDIRS, paths } from './paths'
@@ -27,8 +27,7 @@ function defaultConfig(): RawGuildConfig {
     discord: { token: { $secret: 'discord.token' } },
     llm: {
       provider: 'ollama',
-      dialect: 'auto',
-      baseUrl: 'http://localhost:11434/v1',
+      baseUrl: 'http://localhost:11434',
       apiKey: undefined,
       models: { default: 'qwen3.6', embed: 'nomic-embed-text' },
       embed: {},
@@ -124,22 +123,23 @@ export function initGuildDir(guildDir: string, opts: InitGuildDirOptions = {}): 
     }
   }
 
-  // Seed tools/ and skills/ from codebase if absent
+  // Resync tools/ and skills/ from the codebase on every initGuildDir call.
+  // This keeps the per-guild copy in sync with the running code (handler signatures,
+  // schema versions, etc.) without requiring a manual `guildbot sync` after every
+  // codebase change. cpSync overwrites matching files but does NOT delete orphans,
+  // so any guild-local tools/skills the operator has added are preserved as
+  // overlays alongside the codebase set.
   const codebaseTools = join(codebaseRoot, 'tools')
-  if (!existsSync(p.tools) || isEmptyDir(p.tools)) {
-    if (existsSync(codebaseTools)) {
-      cpSync(codebaseTools, p.tools, { recursive: true })
-    } else {
-      mkdirSync(p.tools, { recursive: true })
-    }
+  if (existsSync(codebaseTools)) {
+    cpSync(codebaseTools, p.tools, { recursive: true })
+  } else {
+    mkdirSync(p.tools, { recursive: true })
   }
   const codebaseSkills = join(codebaseRoot, 'skills')
-  if (!existsSync(p.skills) || isEmptyDir(p.skills)) {
-    if (existsSync(codebaseSkills)) {
-      cpSync(codebaseSkills, p.skills, { recursive: true })
-    } else {
-      mkdirSync(p.skills, { recursive: true })
-    }
+  if (existsSync(codebaseSkills)) {
+    cpSync(codebaseSkills, p.skills, { recursive: true })
+  } else {
+    mkdirSync(p.skills, { recursive: true })
   }
 
   // Seed prompt.md and memory.md from guild-defaults/ if present and absent in the guild dir
@@ -153,10 +153,3 @@ export function initGuildDir(guildDir: string, opts: InitGuildDirOptions = {}): 
   }
 }
 
-function isEmptyDir(dir: string): boolean {
-  try {
-    return readdirSync(dir).length === 0
-  } catch {
-    return true
-  }
-}

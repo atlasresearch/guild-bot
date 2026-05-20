@@ -24,8 +24,7 @@ if (!existsSync(guildDir + '/config.json')) {
       guild: { id: `discord:test-pool-${poolId}`, name: `test-pool-${poolId}` },
       llm: {
         provider: 'ollama',
-        dialect: 'auto',
-        baseUrl: 'http://localhost:11434/v1',
+        baseUrl: 'http://localhost:11434',
         models: { default: 'qwen3.6', embed: 'nomic-embed-text' },
       },
     },

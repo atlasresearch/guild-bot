@@ -1,0 +1,16 @@
+{
+  "name": "@guildbot/llm",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@guildbot/guild-config": "workspace:*",
+    "@guildbot/interfaces": "workspace:*",
+    "ollama": "^0.6.0",
+    "openai": "^4.74.0",
+    "zod": "^4.0.0"
+  }
+}

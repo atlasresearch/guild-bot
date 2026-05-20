@@ -10,7 +10,6 @@ const VALID_CONFIG = {
   discord: { token: { $secret: 'discord.token' } },
   llm: {
     provider: 'ollama',
-    dialect: 'auto',
     baseUrl: 'http://localhost:11434/v1',
     models: { default: 'qwen3.6', embed: 'nomic-embed-text' },
     embed: {},

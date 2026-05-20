@@ -7,7 +7,6 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "@guildbot/interfaces": "workspace:*",
-    "ollama": "^0.6.0"
+    "@guildbot/llm": "workspace:*"
   }
 }

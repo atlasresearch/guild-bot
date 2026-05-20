@@ -40,7 +40,6 @@ export const llmProviderSchema = z.enum(['ollama', 'openai-compat', 'anthropic']
 export type LlmProvider = z.infer<typeof llmProviderSchema>
 
 export const llmDialectSchema = z.enum([
-  'auto',
   'openai',
   'ollama-v1',
   'vllm',
@@ -87,7 +86,9 @@ export const llmEmbedOverridesSchema = z
 export const llmBlockSchema = z
   .object({
     provider: llmProviderSchema.default('ollama'),
-    dialect: llmDialectSchema.default('auto'),
+    // Per plan 004 R4.3: dialect is required only when provider="openai-compat".
+    // When omitted there, the module defaults to "generic" with a startup warning.
+    dialect: llmDialectSchema.nullable().optional(),
     baseUrl: z.string().nullable().optional(),
     apiKey: secretRef(),
     models: llmModelsSchema,

@@ -3,15 +3,33 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-// Only mock external API calls (ollama). Internal modules are exercised for real (R7.9).
-const mockChat = vi.fn()
-vi.mock('ollama', () => ({
-  Ollama: vi.fn().mockImplementation(() => ({
+// Only mock the @guildbot/llm public API; internal modules are exercised for real (R7.7).
+const { mockChat } = vi.hoisted(() => ({ mockChat: vi.fn() }))
+vi.mock('@guildbot/llm', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@guildbot/llm')>()
+  return {
+    ...actual,
     chat: mockChat,
-  })),
-}))
+  }
+})
 
 import { agentLoop, buildSystemPrompt } from './loop'
+
+const noToolsResponse = (content: string) => ({
+  content,
+  toolCalls: [],
+  model: 'test-model',
+  finishReason: 'stop' as const,
+  dialect: 'ollama-native',
+})
+
+const toolCallResponse = (calls: Array<{ name: string; arguments: Record<string, unknown> }>) => ({
+  content: '',
+  toolCalls: calls.map((c, i) => ({ id: `call_${i}`, ...c })),
+  model: 'test-model',
+  finishReason: 'tool_calls' as const,
+  dialect: 'ollama-native',
+})
 
 describe('agentLoop', () => {
   let fixtureToolsDir: string
@@ -51,10 +69,8 @@ describe('agentLoop', () => {
     vi.clearAllMocks()
   })
 
-  it('should call ollama.chat with discovered tools and return final content', async () => {
-    mockChat.mockResolvedValueOnce({
-      message: { content: 'Hello from the model', tool_calls: null },
-    })
+  it('should call chat() with discovered tools and return final content', async () => {
+    mockChat.mockResolvedValueOnce(noToolsResponse('Hello from the model'))
 
     const result = await agentLoop({
       userMessage: 'Hi',
@@ -70,21 +86,12 @@ describe('agentLoop', () => {
     const callArgs = mockChat.mock.calls[0][0]
     expect(callArgs.tools).toHaveLength(1)
     expect(callArgs.tools[0].function.name).toBe('echo_tool')
+    expect(callArgs.thinking).toBe(false)
   })
 
   it('should dispatch tool calls to real handlers and append role:tool results', async () => {
-    // First call: model requests a tool call
-    mockChat.mockResolvedValueOnce({
-      message: {
-        role: 'assistant',
-        content: '',
-        tool_calls: [{ function: { name: 'echo-tool', arguments: { input: 'test' } } }],
-      },
-    })
-    // Second call: model returns final answer
-    mockChat.mockResolvedValueOnce({
-      message: { content: 'Tool returned: test', tool_calls: null },
-    })
+    mockChat.mockResolvedValueOnce(toolCallResponse([{ name: 'echo-tool', arguments: { input: 'test' } }]))
+    mockChat.mockResolvedValueOnce(noToolsResponse('Tool returned: test'))
 
     const result = await agentLoop({
       userMessage: 'Echo test',
@@ -97,9 +104,8 @@ describe('agentLoop', () => {
 
     expect(result).toBe('Tool returned: test')
     expect(mockChat).toHaveBeenCalledTimes(2)
-    // Verify tool result was appended to messages
     const secondCallMessages = mockChat.mock.calls[1][0].messages
-    const toolMsg = secondCallMessages.find((m: any) => m.role === 'tool')
+    const toolMsg = secondCallMessages.find((m: { role: string }) => m.role === 'tool')
     expect(toolMsg).toBeDefined()
     const parsed = JSON.parse(toolMsg.content)
     expect(parsed.success).toBe(true)
@@ -107,13 +113,7 @@ describe('agentLoop', () => {
   })
 
   it('should terminate after 5 iterations even if model keeps returning tool_calls', async () => {
-    mockChat.mockResolvedValue({
-      message: {
-        role: 'assistant',
-        content: '',
-        tool_calls: [{ function: { name: 'echo-tool', arguments: { input: 'loop' } } }],
-      },
-    })
+    mockChat.mockResolvedValue(toolCallResponse([{ name: 'echo-tool', arguments: { input: 'loop' } }]))
 
     const result = await agentLoop({
       userMessage: 'Loop forever',
@@ -129,7 +129,6 @@ describe('agentLoop', () => {
   })
 
   it('should handle tool handler errors gracefully and continue the loop', async () => {
-    // Create a tool that throws
     await mkdir(join(fixtureToolsDir, 'bad-tool'))
     await writeFile(
       join(fixtureToolsDir, 'bad-tool', 'definition.json'),
@@ -143,18 +142,8 @@ describe('agentLoop', () => {
       `export default async () => { throw new Error('handler broke') }`
     )
 
-    // First call: model calls the bad tool
-    mockChat.mockResolvedValueOnce({
-      message: {
-        role: 'assistant',
-        content: '',
-        tool_calls: [{ function: { name: 'bad-tool', arguments: {} } }],
-      },
-    })
-    // Second call: model returns final answer
-    mockChat.mockResolvedValueOnce({
-      message: { content: 'Recovered', tool_calls: null },
-    })
+    mockChat.mockResolvedValueOnce(toolCallResponse([{ name: 'bad-tool', arguments: {} }]))
+    mockChat.mockResolvedValueOnce(noToolsResponse('Recovered'))
 
     const result = await agentLoop({
       userMessage: 'Call bad tool',
@@ -166,18 +155,15 @@ describe('agentLoop', () => {
     })
 
     expect(result).toBe('Recovered')
-    // Verify error was appended as tool result
     const secondCallMessages = mockChat.mock.calls[1][0].messages
-    const toolMsg = secondCallMessages.find((m: any) => m.role === 'tool')
+    const toolMsg = secondCallMessages.find((m: { role: string }) => m.role === 'tool')
     const parsed = JSON.parse(toolMsg.content)
     expect(parsed.success).toBe(false)
     expect(parsed.data.error).toContain('handler broke')
   })
 
   it('should build system prompt from discovered skill descriptions', async () => {
-    mockChat.mockResolvedValueOnce({
-      message: { content: 'OK', tool_calls: null },
-    })
+    mockChat.mockResolvedValueOnce(noToolsResponse('OK'))
 
     await agentLoop({
       userMessage: 'Hi',
@@ -195,18 +181,8 @@ describe('agentLoop', () => {
   })
 
   it('should call onProgress with status updates during the loop', async () => {
-    // First call: model requests a tool call
-    mockChat.mockResolvedValueOnce({
-      message: {
-        role: 'assistant',
-        content: '',
-        tool_calls: [{ function: { name: 'echo-tool', arguments: { input: 'hi' } } }],
-      },
-    })
-    // Second call: model returns final answer
-    mockChat.mockResolvedValueOnce({
-      message: { content: 'Done', tool_calls: null },
-    })
+    mockChat.mockResolvedValueOnce(toolCallResponse([{ name: 'echo-tool', arguments: { input: 'hi' } }]))
+    mockChat.mockResolvedValueOnce(noToolsResponse('Done'))
 
     const onProgress = vi.fn()
 
@@ -220,7 +196,6 @@ describe('agentLoop', () => {
       onProgress,
     })
 
-    // Should have: Thinking (iter 0), Using tool, Thinking (iter 1)
     expect(onProgress).toHaveBeenCalledWith('Thinking...')
     expect(onProgress).toHaveBeenCalledWith('Using echo tool...')
     expect(onProgress.mock.calls.length).toBe(3)

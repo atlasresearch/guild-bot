@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { loadConfig, paths } from '@guildbot/guild-config'
-import { verbose } from '@guildbot/interfaces'
-import ollama from 'ollama'
+import { paths } from '@guildbot/guild-config'
+import { chat } from '@guildbot/llm'
 
 export type AskQuestionContext = {
   sessionId: string
@@ -150,26 +149,22 @@ export async function answerQuestion(options: {
   model?: string
   sourceId?: string
 }) {
-  const cfg = loadConfig()
-  const model = options.model || cfg.llm.models.default
   const sessionDir = options.sessionDir || paths().sessions
   const session = await ensureSession(options.sessionId, sessionDir, options.sourceId)
 
-  verbose('llm:chat answerQuestion', { model, sessionId: session })
-  const response = await ollama.chat({
-    model,
+  const response = await chat({
+    model: options.model,
     messages: [
       {
         role: 'system',
         content:
-          'You answer questions. Respond concisely and avoid speculation. Use only internal reasoning and web search in your answer.'
+          'You answer questions. Respond concisely and avoid speculation. Use only internal reasoning and web search in your answer.',
       },
-      { role: 'user', content: `Context:\n${options.context}\n\nUser question: ${options.question}` }
-    ]
+      { role: 'user', content: `Context:\n${options.context}\n\nUser question: ${options.question}` },
+    ],
   })
-  verbose('llm:chat answerQuestion response', response.message?.content?.slice(0, 200))
 
-  const answer = response.message?.content ?? ''
+  const answer = response.content
   return {
     question: options.question,
     answer,

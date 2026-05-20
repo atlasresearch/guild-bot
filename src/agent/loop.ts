@@ -1,15 +1,14 @@
-import { Ollama } from 'ollama'
+import { chat, type LlmMessage, type LlmTool } from '@guildbot/llm'
 import { discoverSkillDescriptions } from '../skills/discover'
 import { discoverToolDefinitions, loadToolHandler } from '../tools/discover'
 import type { ToolContext, ToolResult } from '../tools/types'
-import { loadConfig } from '@guildbot/guild-config'
 import { verbose } from '@guildbot/interfaces'
 
 const MAX_ITERATIONS = 5
 
 export type AgentLoopOptions = {
   userMessage: string
-  conversationHistory: Array<{ role: string; content: string }>
+  conversationHistory: LlmMessage[]
   context: ToolContext
   model?: string
   toolsDir?: string
@@ -39,40 +38,45 @@ Rules:
 
 export async function agentLoop(options: AgentLoopOptions): Promise<string> {
   const { userMessage, conversationHistory, context, model, toolsDir, skillsDir, onProgress } = options
-  const ollama = new Ollama()
   const emit = onProgress ?? (() => {})
 
   // R3.1: read from disk at the top of every invocation
-  const tools = await discoverToolDefinitions(toolsDir)
+  const tools = (await discoverToolDefinitions(toolsDir)) as LlmTool[]
   const skillDescriptions = await discoverSkillDescriptions(skillsDir)
   const systemPrompt = buildSystemPrompt(skillDescriptions)
 
-  const messages: Array<{ role: string; content: string }> = [
+  const messages: LlmMessage[] = [
     { role: 'system', content: systemPrompt },
     ...conversationHistory,
     { role: 'user', content: userMessage },
   ]
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const usedModel = model ?? loadConfig().llm.models.default
-    verbose(`llm:request [iter=${i}]`, { model: usedModel, messageCount: messages.length, toolCount: tools.length })
+    verbose(`llm:request [iter=${i}]`, { messageCount: messages.length, toolCount: tools.length })
     emit('Thinking...')
 
-    const response = await ollama.chat({
-      model: usedModel,
+    const response = await chat({
+      model,
       messages,
       tools,
-      think: false,
-    } as Parameters<typeof ollama.chat>[0])
+      thinking: false,
+    })
 
-    if (response.message.tool_calls && response.message.tool_calls.length > 0) {
-      verbose(`llm:response [iter=${i}] tool_calls`, response.message.tool_calls.map(tc => ({ name: tc.function.name, args: tc.function.arguments })))
+    if (response.toolCalls.length > 0) {
+      verbose(
+        `llm:response [iter=${i}] tool_calls`,
+        response.toolCalls.map((tc) => ({ name: tc.name, args: tc.arguments })),
+      )
       // Append assistant message with tool calls
-      messages.push(response.message as unknown as { role: string; content: string })
+      messages.push({
+        role: 'assistant',
+        content: response.content,
+        toolCalls: response.toolCalls,
+      })
 
-      for (const toolCall of response.message.tool_calls) {
-        const name = toolCall.function.name
-        const args = toolCall.function.arguments as Record<string, unknown>
+      for (const toolCall of response.toolCalls) {
+        const name = toolCall.name
+        const args = toolCall.arguments
         const friendlyName = name.replace(/[_-]/g, ' ')
         emit(`Using ${friendlyName}...`)
         verbose(`tool:call ${name}`, args)
@@ -88,14 +92,19 @@ export async function agentLoop(options: AgentLoopOptions): Promise<string> {
           }
         }
         verbose(`tool:result ${name}`, { success: result.success, data: result.data })
-        messages.push({ role: 'tool', content: JSON.stringify(result) })
+        messages.push({
+          role: 'tool',
+          content: JSON.stringify(result),
+          toolCallId: toolCall.id,
+          toolName: toolCall.name,
+        })
       }
       continue
     }
 
     // R3.10: no tool_calls — return final answer
-    verbose(`llm:response [iter=${i}] final`, response.message.content.slice(0, 200))
-    return response.message.content
+    verbose(`llm:response [iter=${i}] final`, response.content.slice(0, 200))
+    return response.content
   }
 
   // R3.8: max iterations reached — return last model content

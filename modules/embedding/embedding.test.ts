@@ -1,34 +1,29 @@
-// src/services/embedding.test.ts
-import ollama from 'ollama'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { mockEmbed } = vi.hoisted(() => ({ mockEmbed: vi.fn() }))
+vi.mock('@guildbot/llm', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@guildbot/llm')>()
+  return { ...actual, embed: mockEmbed }
+})
+
 import * as embedding from './embedding'
 
-vi.mock('ollama', () => ({
-  default: {
-    embeddings: vi.fn()
-  }
-}))
-
-describe('EmbeddingService', () => {
+describe('embedding', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('should call ollama.embeddings with correct parameters', async () => {
-    ;(ollama.embeddings as any).mockResolvedValue({ embedding: [0.1, 0.2, 0.3] })
-
+  it('delegates to @guildbot/llm embed() with the supplied model', async () => {
+    mockEmbed.mockResolvedValue([0.1, 0.2, 0.3])
     const result = await embedding.getEmbedding('hello world', 'test-model')
 
-    expect(ollama.embeddings).toHaveBeenCalledWith({
-      model: 'test-model',
-      prompt: 'hello world'
-    })
+    expect(mockEmbed).toHaveBeenCalledWith('hello world', { model: 'test-model' })
     expect(result).toEqual([0.1, 0.2, 0.3])
   })
 
-  it('should return empty array for empty text', async () => {
-    const result = await embedding.getEmbedding('')
-    expect(result).toEqual([])
-    expect(ollama.embeddings).not.toHaveBeenCalled()
+  it('passes undefined model when omitted, letting llm pick the active embed model', async () => {
+    mockEmbed.mockResolvedValue([0.5])
+    await embedding.getEmbedding('hi')
+    expect(mockEmbed).toHaveBeenCalledWith('hi', { model: undefined })
   })
 })

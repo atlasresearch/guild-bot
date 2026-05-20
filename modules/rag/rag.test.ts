@@ -1,24 +1,23 @@
-// src/services/rag.test.ts
-import ollama from 'ollama'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as db from '@guildbot/database'
 import * as embedding from '@guildbot/embedding'
-import * as ragService from './rag'
 
-vi.mock('ollama', () => ({
-  default: {
-    generate: vi.fn()
-  }
-}))
+// Mock the LLM boundary; internal modules run for real.
+const { mockChat } = vi.hoisted(() => ({ mockChat: vi.fn() }))
+vi.mock('@guildbot/llm', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@guildbot/llm')>()
+  return { ...actual, chat: mockChat }
+})
 
-// Mocks
 vi.mock('@guildbot/database', () => ({
-  searchVector: vi.fn()
+  searchVector: vi.fn(),
 }))
 
 vi.mock('@guildbot/embedding', () => ({
-  getEmbedding: vi.fn()
+  getEmbedding: vi.fn(),
 }))
+
+import * as ragService from './rag'
 
 describe('RAGService', () => {
   beforeEach(() => {
@@ -26,7 +25,7 @@ describe('RAGService', () => {
     ;(embedding.getEmbedding as any).mockResolvedValue([0.1])
   })
 
-  it('should search using embedding', async () => {
+  it('searches using the embedding vector', async () => {
     ;(db.searchVector as any).mockResolvedValue([{ content: 'match' }])
     const results = await ragService.search('g1', 'query')
 
@@ -35,20 +34,23 @@ describe('RAGService', () => {
     expect(results[0].content).toBe('match')
   })
 
-  it('should ask question and use context', async () => {
+  it('asks a question using retrieved context and returns the LLM content', async () => {
     ;(db.searchVector as any).mockResolvedValue([
-      { timestamp: 1000, user_id: 'u1', content: 'The secret code is 1234' }
+      { timestamp: 1000, user_id: 'u1', content: 'The secret code is 1234' },
     ])
-    ;(ollama.generate as any).mockResolvedValue({ response: 'The code is 1234' })
+    mockChat.mockResolvedValue({
+      content: 'The code is 1234',
+      toolCalls: [],
+      model: 'qwen3.6',
+      finishReason: 'stop',
+    })
 
     const answer = await ragService.ask('g1', 'What is the code?')
 
-    expect(db.searchVector).toHaveBeenCalled()
-    expect(ollama.generate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: expect.stringContaining('The secret code is 1234')
-      })
-    )
+    expect(mockChat).toHaveBeenCalledOnce()
+    const callArgs = mockChat.mock.calls[0][0]
+    expect(callArgs.messages[0].role).toBe('user')
+    expect(callArgs.messages[0].content).toContain('The secret code is 1234')
     expect(answer).toBe('The code is 1234')
   })
 })

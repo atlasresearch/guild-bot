@@ -18,8 +18,7 @@
 
   "llm": {
     "provider": "ollama",
-    "dialect": "auto",
-    "baseUrl": "http://localhost:11434/v1",
+    "baseUrl": "http://localhost:11434",
     "apiKey": null,
     "models": {
       "default": "qwen3.6",

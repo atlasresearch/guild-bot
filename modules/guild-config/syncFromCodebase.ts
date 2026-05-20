@@ -7,6 +7,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_CODEBASE_ROOT = resolve(HERE, '..', '..')
 
 export type SyncOptions = {
+  /** When true, wipe each target dir before copying — removes orphans. */
   force?: boolean
   codebaseRoot?: string
 }
@@ -14,11 +15,14 @@ export type SyncOptions = {
 /**
  * Re-copy `tools/` and `skills/` from the codebase into the guild dir.
  *
- * - With `force=false` (default), seed only if the target dir is missing.
- * - With `force=true`, overwrite operator customisations.
+ * - Default (force=false): cpSync overwrites matching files and leaves any
+ *   operator-added orphans alone. This is the same behaviour as the on-startup
+ *   resync in initGuildDir.
+ * - force=true: removes each target dir first, then copies. Orphans (including
+ *   operator customisations) are deleted. Use for a clean re-seed.
  *
- * MUST NOT touch config.json, secrets.json, prompt.md, memory.md, or any data
- * directory (R5.5 from plan 003 + R6.3 from plan 006).
+ * Never touches config.json, secrets.json, prompt.md, memory.md, or any data
+ * directory.
  */
 export function syncFromCodebase(guildDir: string, opts: SyncOptions = {}): void {
   const codebaseRoot = opts.codebaseRoot ?? DEFAULT_CODEBASE_ROOT
@@ -31,12 +35,10 @@ export function syncFromCodebase(guildDir: string, opts: SyncOptions = {}): void
 
   for (const { src, dest } of tasks) {
     if (!existsSync(src)) continue
-    if (opts.force || !existsSync(dest)) {
-      mkdirSync(dirname(dest), { recursive: true })
-      if (opts.force && existsSync(dest)) {
-        rmSync(dest, { recursive: true, force: true })
-      }
-      cpSync(src, dest, { recursive: true })
+    mkdirSync(dirname(dest), { recursive: true })
+    if (opts.force && existsSync(dest)) {
+      rmSync(dest, { recursive: true, force: true })
     }
+    cpSync(src, dest, { recursive: true })
   }
 }

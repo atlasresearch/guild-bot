@@ -1,4 +1,5 @@
-export type { Tool } from 'ollama'
+// Tool type re-exported from @guildbot/llm so consumers don't reach for ollama directly.
+export type { LlmTool as Tool } from '@guildbot/llm'
 
 export type ToolContext = {
   guildId?: string

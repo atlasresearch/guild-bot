@@ -86,6 +86,30 @@ describe('initGuildDir', () => {
     expect(existsSync(join(guildDir, 'skills', 'sample', 'SKILL.md'))).toBe(true)
   })
 
+  it('resyncs tools/ and skills/ on every call (overwrites stale codebase files)', async () => {
+    initGuildDir(guildDir, { codebaseRoot })
+    // Simulate a stale per-guild copy: replace the definition.json with old content
+    const defPath = join(guildDir, 'tools', 'sample', 'definition.json')
+    const { writeFileSync, readFileSync } = await import('node:fs')
+    writeFileSync(defPath, '"stale"')
+
+    // Re-invoke; should overwrite the stale copy with the fresh codebase version
+    initGuildDir(guildDir, { codebaseRoot })
+    expect(readFileSync(defPath, 'utf-8')).toBe('{}')
+  })
+
+  it('preserves orphan per-guild tools (operator customisations) across resyncs', async () => {
+    initGuildDir(guildDir, { codebaseRoot })
+    const { writeFileSync, mkdirSync, existsSync } = await import('node:fs')
+    mkdirSync(join(guildDir, 'tools', 'custom-tool'), { recursive: true })
+    writeFileSync(join(guildDir, 'tools', 'custom-tool', 'definition.json'), '{}')
+
+    initGuildDir(guildDir, { codebaseRoot })
+    expect(existsSync(join(guildDir, 'tools', 'custom-tool', 'definition.json'))).toBe(true)
+    // codebase tool still there too
+    expect(existsSync(join(guildDir, 'tools', 'sample', 'definition.json'))).toBe(true)
+  })
+
   it('seeds prompt.md and memory.md from guild-defaults/', () => {
     initGuildDir(guildDir, { codebaseRoot })
     expect(readFileSync(join(guildDir, 'prompt.md'), 'utf8')).toBe('You are GuildBot.')
