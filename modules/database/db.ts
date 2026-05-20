@@ -1,5 +1,5 @@
 import * as lancedb from '@lancedb/lancedb'
-import { DB_DIR } from '@guildbot/config'
+import { paths } from '@guildbot/guild-config'
 import fs from 'fs'
 import { IDBSchema } from './schema'
 
@@ -8,10 +8,10 @@ let dbPath: string = ''
 
 /**
  * Initialise the LanceDB connection.
- * @param dbPathOverride  - explicit path for tests; defaults to DB_DIR from config (R4.1, R5.3)
+ * @param dbPathOverride  - explicit path for tests; defaults to paths().db from the active guild dir.
  */
 export const initDB = async (dbPathOverride?: string) => {
-  dbPath = dbPathOverride ?? DB_DIR
+  dbPath = dbPathOverride ?? paths().db
 
   if (!fs.existsSync(dbPath)) {
     fs.mkdirSync(dbPath, { recursive: true })

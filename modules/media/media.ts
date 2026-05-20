@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { MEDIA_DIR } from '@guildbot/config'
+import { loadConfig, paths } from '@guildbot/guild-config'
 import { exportGraphJSON, exportMermaid, loadGraphJSON } from '@guildbot/exporters'
 import { debug, ensureFfmpegAvailable, ensureWhisperAvailable, info, transcribeWithWhisper } from '@guildbot/interfaces'
 
@@ -108,7 +108,7 @@ export async function transcribeAudioFile(inputPath: string, transcriptPath: str
   const dir = path.dirname(transcriptPath)
   const outBase = path.join(dir, 'transcript')
 
-  const WHISPER_MODEL = process.env.WHISPER_MODEL || path.join(os.homedir(), 'models/ggml-base.en.bin')
+  const WHISPER_MODEL = loadConfig().recording.whisperModel || path.join(os.homedir(), 'models/ggml-base.en.bin')
   await transcribeWithWhisper(WHISPER_MODEL, inputPath, transcriptPath, outBase)
 
   const transcript = await fsp.readFile(transcriptPath, 'utf8')
@@ -189,7 +189,7 @@ const notify = async (
 export async function audioToTranscript(
   audioURL: string,
   onProgress?: (message: string) => void | Promise<void>,
-  mediaDir: string = MEDIA_DIR
+  mediaDir: string = paths().media
 ) {
   await fsp.mkdir(mediaDir, { recursive: true })
 
@@ -357,7 +357,7 @@ export async function audioToTranscript(
     }
 
     const outBase = path.join(sourceDir, 'audio')
-    const WHISPER_MODEL = process.env.WHISPER_MODEL || path.join(os.homedir(), 'models/ggml-base.en.bin')
+    const WHISPER_MODEL = loadConfig().recording.whisperModel || path.join(os.homedir(), 'models/ggml-base.en.bin')
     if (!(await fileExists(transcriptPath))) {
       await transcribeWithWhisper(WHISPER_MODEL, audioPath, transcriptPath, outBase)
     }
@@ -452,7 +452,7 @@ export async function transcriptToDiagrams(
   onProgress?: (message: string) => void | Promise<void>,
   force = false,
   cldGenerator?: CldGenerator,
-  mediaDir: string = MEDIA_DIR
+  mediaDir: string = paths().media
 ) {
   const outId = id || `t-${Date.now()}`
   const sourceDir = path.join(mediaDir, outId)

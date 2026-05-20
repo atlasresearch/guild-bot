@@ -8,9 +8,12 @@ vi.mock('@guildbot/exporters', () => ({
   exportGraphJSON: vi.fn().mockResolvedValue({ jsonPath: '/tmp/exports/graph.json' }),
 }))
 
-vi.mock('@guildbot/config', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@guildbot/config')>()
-  return { ...actual, EXPORTS_DIR: '/tmp/exports' }
+vi.mock('@guildbot/guild-config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@guildbot/guild-config')>()
+  return {
+    ...actual,
+    paths: () => ({ ...actual.paths('/tmp/guildbot-export-kumu-test'), exports: '/tmp/exports' }),
+  }
 })
 
 import handler from './handler'

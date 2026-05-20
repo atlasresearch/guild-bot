@@ -1,8 +1,5 @@
 node_modules/
 dist/
-.env
-.env.*
-!.env.example
 csvs/
 package-lock.json
 .tmp*
@@ -11,3 +8,12 @@ package-lock.json
 .sessions/
 .lancedb_*
 .lancedb
+
+# secrets: defence in depth — secrets.json lives in <GUILD_DIR>/, not the repo
+secrets.json
+secrets.*.json
+!secrets.example.json
+
+# legacy .env files removed by plan 003; refuse to track new ones
+.env
+.env.*

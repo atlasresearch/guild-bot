@@ -1,11 +1,9 @@
 import fsp from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // --- Mocks Setup ---
 
-const { mockClient } = vi.hoisted(() => {
+const { mockClient, TEST_SESSION_DIR } = vi.hoisted(() => {
   const mockUser = { id: '123456789', tag: 'TestBot#1234' }
   const mockLogin = vi.fn().mockResolvedValue('token')
   const mockClientOn = vi.fn()
@@ -16,7 +14,12 @@ const { mockClient } = vi.hoisted(() => {
     login: mockLogin,
     channels: { fetch: vi.fn() }
   }
-  return { mockClient }
+  const tmpdirNative = require('node:os').tmpdir() as string
+  const TEST_SESSION_DIR = require('node:path').join(
+    tmpdirNative,
+    'test-sessions-' + Math.random().toString(36).slice(2),
+  )
+  return { mockClient, TEST_SESSION_DIR }
 })
 
 // 1. Mock Discord.js
@@ -61,10 +64,23 @@ vi.mock('./tools/discover', () => ({
   discoverToolDefinitions: vi.fn().mockResolvedValue([]),
 }))
 
+// 6. Override the active guild's session dir so each test writes to an isolated
+//    temp dir we can wipe in afterEach.
+vi.mock('@guildbot/guild-config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@guildbot/guild-config')>()
+  return {
+    ...actual,
+    paths: (guildDir?: string) => ({
+      ...actual.paths(guildDir),
+      sessions: TEST_SESSION_DIR,
+      contextDir: require('node:path').join(TEST_SESSION_DIR, 'context'),
+    }),
+  }
+})
+
 // --- Imports ---
 
 import { agentLoop } from './agent/loop'
-import { ASKQUESTION_CONSTANTS } from './askQuestion'
 import { handleMessage } from './index'
 
 // --- Tests ---
@@ -73,13 +89,10 @@ describe('handleMessage', () => {
   let mockReply: any
   let mockMessage: any
   let mockChannel: any
-  let TEST_SESSION_DIR: string
 
   beforeEach(async () => {
     vi.clearAllMocks()
 
-    TEST_SESSION_DIR = path.join(tmpdir(), 'test-sessions-' + Math.random().toString(36).slice(2))
-    ASKQUESTION_CONSTANTS.SESSION_DIR = TEST_SESSION_DIR
     await fsp.mkdir(TEST_SESSION_DIR, { recursive: true })
 
     mockReply = {

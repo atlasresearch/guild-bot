@@ -1,4 +1,4 @@
-import { EXPORTS_DIR } from '@guildbot/config'
+import { paths } from '@guildbot/guild-config'
 import { exportGraphJSON } from '@guildbot/exporters'
 import { toKumuJSON } from '@guildbot/media'
 import type { ToolHandler } from '@guildbot/types'
@@ -8,7 +8,7 @@ const handler: ToolHandler = async (args, _ctx) => {
   const relationships = args.relationships as Array<{ subject: string; object: string; predicate: string }>
 
   const kumu = toKumuJSON(nodes, relationships)
-  const { jsonPath } = await exportGraphJSON(EXPORTS_DIR, nodes, relationships)
+  const { jsonPath } = await exportGraphJSON(paths().exports, nodes, relationships)
   return { success: true, data: { file_path: jsonPath, kumu } }
 }
 

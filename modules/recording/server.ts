@@ -4,7 +4,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { WebSocket, WebSocketServer } from 'ws'
-import { RECORDINGS_DIR } from '@guildbot/config'
+import { loadConfig, paths } from '@guildbot/guild-config'
 import { ensureWhisperAvailable, transcribeWithWhisper } from '@guildbot/interfaces'
 
 type UserState = {
@@ -154,7 +154,8 @@ async function processChunk(sess: Session, userId: string, pcmChunk: Buffer) {
   await fsp.writeFile(wavTmp, wav)
 
   const outBase = vttTmp.replace(/\.vtt$/, '')
-  const model = process.env.WHISPER_MODEL || path.join(os.homedir(), 'models/ggml-base.en.bin')
+  const cfgWhisper = loadConfig().recording.whisperModel
+  const model = cfgWhisper || path.join(os.homedir(), 'models/ggml-base.en.bin')
   await transcribeWithWhisper(model, wavTmp, vttTmp, outBase)
   await appendVttWithOffset(sess.vttPath, vttTmp, u.elapsedSec, u.userName)
 
@@ -269,7 +270,7 @@ function takeBytes(buf: Buffer, count: number): { head: Buffer; tail: Buffer } {
 async function handlePcm(recId: string, rate: number, channels: number, pcm: Buffer, userId: string) {
   let sess = SESSIONS.get(recId)
   if (!sess) {
-    const dir = path.join(RECORDINGS_DIR, recId)
+    const dir = path.join(paths().recordings, recId)
     ensureDir(dir)
     const vttPath = path.join(dir, 'audio.vtt')
     const includeAudio = SESSION_PREFS.get(recId)?.includeAudio ?? false

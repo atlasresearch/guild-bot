@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { CONTEXT_DIR, DEFAULT_MODEL, SESSIONS_DIR } from '@guildbot/config'
+import { loadConfig, paths } from '@guildbot/guild-config'
 import { verbose } from '@guildbot/interfaces'
 import ollama from 'ollama'
 
@@ -18,8 +18,9 @@ export type AttachmentSummary = {
   size: number
 }
 
-// R2.5: single definition — SESSIONS_DIR and CONTEXT_DIR come from @guildbot/config
-const contextPathFor = (key: string) => path.join(CONTEXT_DIR, `${key}.json`)
+// Sessions and context dir come from @guildbot/guild-config. Resolved per call
+// so edits to the active guild dir take effect without restart.
+const contextPathFor = (key: string) => path.join(paths().contextDir, `${key}.json`)
 
 type SessionMeta = { id: string; title?: string; createdAt: string }
 
@@ -41,7 +42,8 @@ async function writeSessionMeta(sessionDir: string, meta: SessionMeta) {
 /**
  * Ensure a session exists, creating it if necessary.
  */
-export async function ensureSession(sessionId?: string, sessionDir = SESSIONS_DIR, name?: string) {
+export async function ensureSession(sessionId?: string, sessionDir?: string, name?: string) {
+  sessionDir = sessionDir ?? paths().sessions
   await fsp.mkdir(sessionDir, { recursive: true })
   if (sessionId) {
     const existing = await readSessionMeta(sessionDir, sessionId)
@@ -136,7 +138,7 @@ async function readContext(key: string): Promise<AskQuestionContext | undefined>
 }
 
 async function writeContext(key: string, context: AskQuestionContext) {
-  await fsp.mkdir(CONTEXT_DIR, { recursive: true })
+  await fsp.mkdir(paths().contextDir, { recursive: true })
   await fsp.writeFile(contextPathFor(key), JSON.stringify(context, null, 2), 'utf8')
 }
 
@@ -148,8 +150,9 @@ export async function answerQuestion(options: {
   model?: string
   sourceId?: string
 }) {
-  const model = options.model || DEFAULT_MODEL
-  const sessionDir = options.sessionDir || SESSIONS_DIR
+  const cfg = loadConfig()
+  const model = options.model || cfg.llm.models.default
+  const sessionDir = options.sessionDir || paths().sessions
   const session = await ensureSession(options.sessionId, sessionDir, options.sourceId)
 
   verbose('llm:chat answerQuestion', { model, sessionId: session })
@@ -192,7 +195,3 @@ export async function cloneAskQuestionContext(fromKey: string | undefined, toKey
   if (ctx) await writeContext(toKey, ctx)
 }
 
-export const ASKQUESTION_CONSTANTS = {
-  MODEL: DEFAULT_MODEL,
-  SESSION_DIR: SESSIONS_DIR
-}

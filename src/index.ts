@@ -14,9 +14,8 @@ import {
 
 import fs from 'fs/promises'
 import { join } from 'node:path'
-import { RECORDINGS_DIR, ensureEnvironment } from '@guildbot/config'
+import { initGuildDir, loadConfig, paths, resolveGuildDir } from '@guildbot/guild-config'
 import {
-  ASKQUESTION_CONSTANTS,
   cloneAskQuestionContext,
   ensureSession,
   formatAttachmentsForPrompt,
@@ -34,17 +33,26 @@ import * as ragService from '@guildbot/rag'
 import { agentLoop } from './agent/loop'
 import { loadToolHandler } from './tools/discover'
 
-// R1.2, R3.1: seed environment directory on startup (tools, skills, data dirs, .env)
-ensureEnvironment(join(import.meta.dirname, '..'))
+// Resolve the active guild dir and ensure it is seeded (data subdirs, tools, skills,
+// prompt.md, memory.md). config.json + secrets.json must already exist; the loader
+// fails loudly otherwise.
+const GUILD_DIR = resolveGuildDir()
+if (!process.env.VITEST) {
+  initGuildDir(GUILD_DIR, { codebaseRoot: join(import.meta.dirname, '..') })
+}
 
-const DISCORD_TOKEN: string | undefined = process.env.DISCORD_TOKEN
-const LLM_URL: string | undefined = process.env.LLM_URL
-const ALWAYS_RECORDING_CHANNEL_ID: string | undefined = process.env.ALWAYS_RECORDING_CHANNEL_ID
+// initial config read — logs startup-only fields and surfaces validation errors early
+const STARTUP_CONFIG = process.env.VITEST ? null : loadConfig(GUILD_DIR)
+if (STARTUP_CONFIG) {
+  console.log(
+    `[startup] guildDir=${GUILD_DIR} guild=${STARTUP_CONFIG.guild.name} ` +
+      `discord.applicationId=${STARTUP_CONFIG.discord.applicationId ?? '<unset>'} ` +
+      `(token + applicationId are startup-only — restart required if edited)`,
+  )
+}
 
-// R4.8: use RECORDINGS_DIR from config (R4.1)
-const RECORDINGS_ROOT = RECORDINGS_DIR
+const RECORDINGS_ROOT = paths(GUILD_DIR).recordings
 
-// R4.1: initDB with no arg defaults to DB_DIR from config
 db.initDB().catch(console.error)
 
 const findRecordingById = async (recordingId?: string) => {
@@ -65,7 +73,7 @@ const findLatestRecordingForChannel = async (channelId: string) => {
       entries
         .filter((d) => d.isDirectory() && d.name.startsWith(`${channelId}-`))
         .map(async (d) => {
-          const vttPath = path.join(RECORDINGS_ROOT, d.name, 'audio.vtt')
+          const vttPath = join(RECORDINGS_ROOT, d.name, 'audio.vtt')
           try {
             const stat = await fs.stat(vttPath)
             return { recordingId: d.name, vttPath, mtimeMs: stat.mtimeMs }
@@ -167,12 +175,14 @@ async function findReferencedMessage(message: Message) {
   return undefined
 }
 
+const DISCORD_TOKEN = STARTUP_CONFIG?.discord.token
+
 if (!DISCORD_TOKEN && !process.env.VITEST) {
-  console.error('Missing DISCORD_TOKEN in environment')
+  console.error('Missing discord.token in guild config (secrets.json)')
   process.exit(1)
 }
-if (!LLM_URL && !process.env.VITEST) {
-  console.error('Missing LLM_URL in environment')
+if (!STARTUP_CONFIG?.llm.baseUrl && !process.env.VITEST) {
+  console.error('Missing llm.baseUrl in guild config (config.json)')
   process.exit(1)
 }
 
@@ -207,7 +217,7 @@ client.once('ready', async () => {
   }
 
   try {
-    const guildId = process.env.GUILD_ID
+    const guildId = loadConfig().discord.registerCommandsInGuildId
     if (guildId && client.application?.commands) {
       const commands: ApplicationCommandDataResolvable[] = [
         {
@@ -783,7 +793,7 @@ export async function handleInteraction(interaction: Interaction) {
         }
 
         const transcriptChannel =
-          (await fetchTextChannel(process.env.RECORDING_TRANSCRIPT_CHANNEL_ID)) ||
+          (await fetchTextChannel(loadConfig().discord.recordingTranscriptChannelId ?? undefined)) ||
           (await fetchTextChannel(sess.textChannelId ?? active?.textChannelId)) ||
           chat.channel
 
@@ -854,7 +864,9 @@ export async function handleInteraction(interaction: Interaction) {
 }
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
-  if (!ALWAYS_RECORDING_CHANNEL_ID) return
+  // Re-read config per event so an operator edit takes effect immediately (R2.4)
+  const alwaysRecordingChannelId = loadConfig().discord.alwaysRecordingChannelId
+  if (!alwaysRecordingChannelId) return
 
   // Ignore events triggered by the bot itself
   if (oldState.member?.user.id === client.user?.id || newState.member?.user.id === client.user?.id) {
@@ -862,10 +874,10 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   }
 
   const isRelevant =
-    oldState.channelId === ALWAYS_RECORDING_CHANNEL_ID || newState.channelId === ALWAYS_RECORDING_CHANNEL_ID
+    oldState.channelId === alwaysRecordingChannelId || newState.channelId === alwaysRecordingChannelId
   if (!isRelevant) return
 
-  const channelId = ALWAYS_RECORDING_CHANNEL_ID
+  const channelId = alwaysRecordingChannelId
   const guild = newState.guild
 
   const channel = await client.channels.fetch(channelId).catch(() => null)
@@ -898,7 +910,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
       let dest = await getSendableChannel(targetTextChannelId)
 
       if (!dest) {
-        targetTextChannelId = process.env.RECORDING_TRANSCRIPT_CHANNEL_ID || ''
+        targetTextChannelId = loadConfig().discord.recordingTranscriptChannelId || ''
         dest = await getSendableChannel(targetTextChannelId)
       }
 
@@ -920,7 +932,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
       console.log(`[AutoRecord] Stopped recording in ${channel.name}`)
 
-      const destId = sess.textChannelId || process.env.RECORDING_TRANSCRIPT_CHANNEL_ID
+      const destId = sess.textChannelId || (loadConfig().discord.recordingTranscriptChannelId ?? undefined)
       const dest = await getSendableChannel(destId)
 
       if (dest) {
@@ -980,10 +992,11 @@ export async function handleMessage(message: Message) {
 
   try {
     if (!sessionContext) {
-      const session = await ensureSession(undefined, ASKQUESTION_CONSTANTS.SESSION_DIR, 'text')
+      const sessionDir = paths().sessions
+      const session = await ensureSession(undefined, sessionDir, 'text')
       sessionContext = {
         sessionId: session.id,
-        sessionDir: ASKQUESTION_CONSTANTS.SESSION_DIR,
+        sessionDir,
         sourceId: session.title || 'text'
       }
     }
@@ -1034,7 +1047,7 @@ export async function handleMessage(message: Message) {
         userId: message.author.id,
         sessionDir: sessionContext.sessionDir,
       },
-      model: ASKQUESTION_CONSTANTS.MODEL,
+      model: loadConfig().llm.models.default,
       onProgress: (status) => {
         reply.edit(status).catch(() => {})
         if ('sendTyping' in reply.channel) {

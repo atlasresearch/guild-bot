@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Ollama } from 'ollama'
 import { z } from 'zod'
-import { DEFAULT_MODEL } from '@guildbot/config'
+import { loadConfig } from '@guildbot/guild-config'
 import type { ToolHandler } from '@guildbot/types'
 import { verbose } from '@guildbot/interfaces'
 
@@ -48,9 +48,10 @@ const handler: ToolHandler = async (args, _ctx) => {
     ? `${prompt}\n\nTranscript:\n${transcriptLines.join('\n')}`
     : transcriptLines.join('\n')
 
-  verbose('llm:chat generate-meeting-digest', { model: DEFAULT_MODEL, contentLength: content.length })
+  const model = loadConfig().llm.models.default
+  verbose('llm:chat generate-meeting-digest', { model, contentLength: content.length })
   const response = await ollama.chat({
-    model: DEFAULT_MODEL,
+    model,
     format: 'json',
     think: true,
     messages: [

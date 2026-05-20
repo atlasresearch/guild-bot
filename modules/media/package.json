@@ -7,7 +7,7 @@
     ".": "./index.ts"
   },
   "dependencies": {
-    "@guildbot/config": "workspace:*",
+    "@guildbot/guild-config": "workspace:*",
     "@guildbot/exporters": "workspace:*",
     "@guildbot/interfaces": "workspace:*"
   }

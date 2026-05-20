@@ -2,7 +2,7 @@ import { Ollama } from 'ollama'
 import { discoverSkillDescriptions } from '../skills/discover'
 import { discoverToolDefinitions, loadToolHandler } from '../tools/discover'
 import type { ToolContext, ToolResult } from '../tools/types'
-import { DEFAULT_MODEL } from '@guildbot/config'
+import { loadConfig } from '@guildbot/guild-config'
 import { verbose } from '@guildbot/interfaces'
 
 const MAX_ITERATIONS = 5
@@ -54,7 +54,7 @@ export async function agentLoop(options: AgentLoopOptions): Promise<string> {
   ]
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const usedModel = model ?? DEFAULT_MODEL
+    const usedModel = model ?? loadConfig().llm.models.default
     verbose(`llm:request [iter=${i}]`, { model: usedModel, messageCount: messages.length, toolCount: tools.length })
     emit('Thinking...')
 

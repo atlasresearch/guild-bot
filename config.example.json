@@ -1,0 +1,58 @@
+{
+  "$schema": "https://guildbot.dev/schema/config.v1.json",
+  "version": 1,
+
+  "guild": {
+    "id": "discord:123456789012345678",
+    "name": "Example Guild",
+    "description": "Replace with a short description of this Discord guild."
+  },
+
+  "discord": {
+    "token": { "$secret": "discord.token" },
+    "applicationId": "987654321098765432",
+    "registerCommandsInGuildId": "123456789012345678",
+    "alwaysRecordingChannelId": null,
+    "recordingTranscriptChannelId": null
+  },
+
+  "llm": {
+    "provider": "ollama",
+    "dialect": "auto",
+    "baseUrl": "http://localhost:11434/v1",
+    "apiKey": null,
+    "models": {
+      "default": "qwen3.6",
+      "chat": null,
+      "embed": "nomic-embed-text",
+      "structured": null
+    },
+    "embed": {
+      "provider": null,
+      "baseUrl": null,
+      "dialect": null
+    }
+  },
+
+  "recording": {
+    "whisperModel": null
+  },
+
+  "threads": {
+    "compaction": {
+      "thresholdMessages": 60,
+      "thresholdTokens": 20000,
+      "keepLastN": 10
+    }
+  },
+
+  "memory": {
+    "maxBytes": 32000,
+    "extractionEnabled": true,
+    "operatorRoleIds": []
+  },
+
+  "tools": {
+    "disabled": []
+  }
+}

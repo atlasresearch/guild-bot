@@ -81,7 +81,7 @@ export async function startRecording(
     const ws = new WebSocket(`ws://localhost:${port}`)
     await new Promise<void>((res, rej) => {
       ws.once('open', () => res())
-      ws.once('error', (e) => rej(e))
+      ws.once('error', (e: Error) => rej(e))
     })
 
     // Promise resolves when server signals recording completion

@@ -39,6 +39,34 @@ vi.mock('fs/promises', () => ({
   }
 }))
 
+// Stub loadConfig so the bot sees the channel IDs we want for the test
+vi.mock('@guildbot/guild-config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@guildbot/guild-config')>()
+  return {
+    ...actual,
+    loadConfig: vi.fn(() => ({
+      version: 1,
+      guild: { id: 'discord:test', name: 'test' },
+      discord: {
+        token: 'mock-token',
+        alwaysRecordingChannelId: 'always-record-123',
+        recordingTranscriptChannelId: 'transcript-channel-456',
+      },
+      llm: {
+        provider: 'ollama',
+        dialect: 'auto',
+        baseUrl: 'http://mock-llm/v1',
+        models: { default: 'qwen3.6', embed: 'nomic-embed-text' },
+        embed: {},
+      },
+      recording: {},
+      threads: { compaction: { thresholdMessages: 60, thresholdTokens: 20000, keepLastN: 10 } },
+      memory: { maxBytes: 32000, extractionEnabled: true, operatorRoleIds: [] },
+      tools: { disabled: [] },
+    })),
+  }
+})
+
 import { getActiveRecording, startRecording, stopRecording } from '@guildbot/recording'
 
 describe('Auto-Recording Feature', () => {
@@ -47,11 +75,6 @@ describe('Auto-Recording Feature', () => {
   beforeEach(async () => {
     vi.resetModules()
     vi.clearAllMocks()
-
-    process.env.ALWAYS_RECORDING_CHANNEL_ID = 'always-record-123'
-    process.env.RECORDING_TRANSCRIPT_CHANNEL_ID = 'transcript-channel-456'
-    process.env.DISCORD_TOKEN = 'mock-token'
-    process.env.LLM_URL = 'http://mock-llm'
 
     // Re-import index to register listeners
     await import('./index')

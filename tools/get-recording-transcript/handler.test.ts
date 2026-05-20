@@ -1,16 +1,18 @@
 import fsp from 'node:fs/promises'
+import os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// vi.hoisted runs before vi.mock hoisting, so the variable is available in the factory (R5.2)
-const { testRecordingsDir } = vi.hoisted(() => ({
-  testRecordingsDir: join(require('node:os').tmpdir(), `guildbot-rec-test-${Date.now()}`)
-}))
-
-vi.mock('@guildbot/config', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@guildbot/config')>()
-  return { ...actual, RECORDINGS_DIR: testRecordingsDir }
+// vi.hoisted runs before vi.mock hoisting, so the variable is available in the factory
+const { testRecordingsDir } = vi.hoisted(() => {
+  // Cannot import 'node:os' at hoist time, so use a Math.random-derived path
+  const tmp = '/tmp'
+  return { testRecordingsDir: `${tmp}/guildbot-rec-test-${Date.now()}-${Math.random().toString(36).slice(2)}` }
 })
+
+vi.mock('@guildbot/guild-config', () => ({
+  paths: () => ({ recordings: testRecordingsDir }),
+}))
 
 import handler from './handler'
 
@@ -38,3 +40,6 @@ describe('get-recording-transcript handler', () => {
     await expect(handler({ recording_id: 'nonexistent' }, {})).rejects.toThrow()
   })
 })
+
+// silence unused-import for tmpdir if any future tests need it
+void os

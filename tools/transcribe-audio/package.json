@@ -6,6 +6,6 @@
   "dependencies": {
     "@guildbot/types": "workspace:*",
     "@guildbot/media": "workspace:*",
-    "@guildbot/config": "workspace:*"
+    "@guildbot/guild-config": "workspace:*"
   }
 }

@@ -37,7 +37,7 @@ The core capability is knowledge accumulation and retrieval: messages and transc
 
 `@guild-bot <question>` opens a thread and runs the agent loop directly.
 
-Set `ALWAYS_RECORDING_CHANNEL_ID` to auto-start and auto-stop recording as members join and leave.
+Set `discord.alwaysRecordingChannelId` in the guild's `config.json` to auto-start and auto-stop recording as members join and leave.
 
 **CLI** — `guildbot <command>` for offline and scripted use.
 
@@ -47,8 +47,8 @@ Set `ALWAYS_RECORDING_CHANNEL_ID` to auto-start and auto-stop recording as membe
 | `diagram <transcript.txt> <graph.json>` | Extract a causal graph from a transcript |
 | `kumu <graph.json> <output.json>` | Convert a graph to Kumu JSON |
 | `mermaid <graph.json> <output.mmd>` | Render a graph as a Mermaid diagram |
-| `init [envName]` | Create and seed an environment directory |
-| `sync [envName]` | Re-copy tools/skills from the codebase into the environment |
+| `init <guild-dir>` | Create and seed a new guild directory |
+| `sync <guild-dir> [--force]` | Re-copy tools/skills from the codebase into a guild dir |
 
 ## Architecture
 
@@ -63,7 +63,7 @@ tools/<name>/       — one directory per agent tool
   handler.ts        — async function that executes the tool
 
 modules/            — internal pnpm workspace packages
-  config            — environment/path resolution (@guildbot/config)
+  guild-config      — per-guild config.json + secrets.json loader, path helpers (@guildbot/guild-config)
   database          — LanceDB vector store, message schema (@guildbot/database)
   embedding         — Ollama embedding calls (@guildbot/embedding)
   media             — audio download, Whisper transcription, diagram pipeline (@guildbot/media)
@@ -87,15 +87,23 @@ modules/            — internal pnpm workspace packages
 
 ## Setup
 
+Each Discord guild lives in its own self-contained directory containing a `config.json`, a `secrets.json` (mode `0600`), the LanceDB vector store, recordings, sessions, tools, skills, and per-guild prompt/memory. One process serves one guild dir.
+
 ```bash
-cp .env.example .env   # fill in DISCORD_TOKEN, GUILD_ID, LLM_URL, DEFAULT_MODEL
 pnpm install
-pnpm dev               # tsx watch src/index.ts
+pnpm tsx src/cli.ts init ~/.guildbot/myguild   # seed a new guild dir
+$EDITOR ~/.guildbot/myguild/config.json        # set guild ID, LLM endpoint, etc.
+$EDITOR ~/.guildbot/myguild/secrets.json       # add your Discord bot token
+GUILDBOT_GUILD_DIR=~/.guildbot/myguild pnpm dev
 ```
 
-Required environment variables: `DISCORD_TOKEN`, `LLM_URL` (Ollama endpoint), `DEFAULT_MODEL` (default: `qwen3.6`).
+Or pass `--guild-dir`:
 
-Optional: `GUILD_ID` (registers slash commands in one guild on startup), `ALWAYS_RECORDING_CHANNEL_ID`, `RECORDING_TRANSCRIPT_CHANNEL_ID`, `WHISPER_MODEL`.
+```bash
+pnpm tsx src/index.ts --guild-dir ~/.guildbot/myguild
+```
+
+The `config.example.json` and `secrets.example.json` at the repo root document every field. `config.json` is safe to share (e.g. attach to a bug report) — secrets always live in the sibling `secrets.json` and are never inline.
 
 ```bash
 pnpm test              # vitest

@@ -7,6 +7,6 @@
     "@guildbot/types": "workspace:*",
     "@guildbot/media": "workspace:*",
     "@guildbot/exporters": "workspace:*",
-    "@guildbot/config": "workspace:*"
+    "@guildbot/guild-config": "workspace:*"
   }
 }

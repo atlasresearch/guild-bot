@@ -11,7 +11,7 @@ import {
   transcriptToDiagrams
 } from '@guildbot/media'
 import { buildMermaid, exportMermaid } from '@guildbot/exporters'
-import { ensureEnvironment, syncEnvironment } from '@guildbot/config'
+import { initGuildDir, syncFromCodebase } from '@guildbot/guild-config'
 import { loadToolHandler } from './tools/discover'
 
 const CODEBASE_ROOT = path.join(import.meta.dirname, '..')
@@ -154,106 +154,39 @@ async function cmdMermaid(input: string, output: string) {
   console.log('Mermaid diagram written to', output)
 }
 
-// ── Environment management commands ─────────────────────────────────────────
+// ── Guild dir management commands ───────────────────────────────────────────
 
 /**
- * Initialize (or re-verify) an environment directory.
- * guildbot init [envName]
+ * Create (or re-verify) a guild directory.
+ * guildbot init <path>
  */
-async function cmdInit(envName: string = process.env.GUILDBOT_ENV || 'dev') {
-  const envDir = path.join(homedir(), `.guildbot-${envName}`)
-  ensureEnvironment(CODEBASE_ROOT, envDir)
-  console.log(`Environment initialised: ${envDir}`)
-  if (!fs.existsSync(path.join(envDir, '.env'))) {
-    console.warn(`  Note: no .env found in ${envDir} — copy .env.example and fill in your credentials.`)
+async function cmdInit(argv: string[]) {
+  const target = argv[0]
+  if (!target) {
+    throw new Error('Usage: init <guild-dir>')
   }
+  const guildDir = path.resolve(target)
+  initGuildDir(guildDir, { codebaseRoot: CODEBASE_ROOT })
+  console.log(`Guild directory initialised: ${guildDir}`)
+  console.log('Next steps:')
+  console.log(`  1. Edit ${path.join(guildDir, 'config.json')} with your guild's settings.`)
+  console.log(`  2. Edit ${path.join(guildDir, 'secrets.json')} to add your Discord bot token.`)
+  console.log(`  3. Run the bot with --guild-dir ${guildDir} (or GUILDBOT_GUILD_DIR=${guildDir}).`)
 }
 
 /**
- * Re-copy tools/skills from the codebase into an existing environment.
- * guildbot sync [envName] [--force]
+ * Re-copy tools/skills from the codebase into an existing guild dir.
+ * guildbot sync <guild-dir> [--force]
  */
-async function cmdSync(envName: string = process.env.GUILDBOT_ENV || 'dev', force = false) {
-  const envDir = path.join(homedir(), `.guildbot-${envName}`)
-  syncEnvironment(CODEBASE_ROOT, envDir, force)
-  console.log(`Synced tools/skills to ${envDir}${force ? ' (forced)' : ''}`)
-}
-
-/**
- * Migrate data from the old in-repo layout to an environment directory.
- *
- * guildbot migrate [--env <envName>] [--from <projectRoot>]
- *
- * Old layout (under projectRoot):
- *   .lancedb_prod/        → <env>/db/
- *   .lancedb/             → dev env db/          (only when migrating dev)
- *   .tmp/recordings/      → <env>/recordings/
- *   .tmp/discord-sessions/       → prod env sessions/
- *   .tmp/discord-dev-sessions/   → dev env sessions/
- *   .tmp/chat-sessions/discord/  → prod env media/
- *   .tmp/chat-sessions/discord-dev/ → dev env media/
- *   .env.prod / .env.dev  → <env>/.env
- */
-async function cmdMigrate(argv: string[]) {
-  let fromDir = CODEBASE_ROOT
-  let envName = 'prod'
-
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--env' && argv[i + 1]) envName = argv[++i]
-    else if (argv[i] === '--from' && argv[i + 1]) fromDir = argv[++i]
+async function cmdSync(argv: string[]) {
+  const target = argv[0]
+  if (!target || target.startsWith('--')) {
+    throw new Error('Usage: sync <guild-dir> [--force]')
   }
-
-  const envDir = path.join(homedir(), `.guildbot-${envName}`)
-  const isDev = envName === 'dev'
-
-  console.log(`Migrating ${isDev ? 'dev' : 'prod'} data:  ${fromDir}  →  ${envDir}`)
-
-  // Ensure base dirs exist
-  ensureEnvironment(CODEBASE_ROOT, envDir)
-
-  const copyDir = async (src: string, dest: string, label: string) => {
-    if (!fs.existsSync(src)) {
-      console.log(`  skip ${label} (source not found: ${src})`)
-      return
-    }
-    console.log(`  ${label}: ${src} → ${dest}`)
-    await fsp.cp(src, dest, { recursive: true })
-  }
-
-  if (isDev) {
-    await copyDir(path.join(fromDir, '.lancedb'), path.join(envDir, 'db'), 'dev DB')
-    await copyDir(
-      path.join(fromDir, '.tmp', 'discord-dev-sessions'),
-      path.join(envDir, 'sessions'),
-      'dev sessions'
-    )
-    const devChatSrc = path.join(fromDir, '.tmp', 'chat-sessions', 'discord-dev')
-    await copyDir(devChatSrc, path.join(envDir, 'media'), 'dev media')
-    const devEnv = path.join(fromDir, '.env.dev')
-    const destEnv = path.join(envDir, '.env')
-    if (fs.existsSync(devEnv)) {
-      await fsp.copyFile(devEnv, destEnv)
-      console.log(`  .env.dev → ${destEnv}`)
-    }
-  } else {
-    await copyDir(path.join(fromDir, '.lancedb_prod'), path.join(envDir, 'db'), 'prod DB')
-    await copyDir(path.join(fromDir, '.tmp', 'recordings'), path.join(envDir, 'recordings'), 'recordings')
-    await copyDir(
-      path.join(fromDir, '.tmp', 'discord-sessions'),
-      path.join(envDir, 'sessions'),
-      'prod sessions'
-    )
-    const prodChatSrc = path.join(fromDir, '.tmp', 'chat-sessions', 'discord')
-    await copyDir(prodChatSrc, path.join(envDir, 'media'), 'prod media')
-    const prodEnv = path.join(fromDir, '.env.prod')
-    const destEnv = path.join(envDir, '.env')
-    if (fs.existsSync(prodEnv)) {
-      await fsp.copyFile(prodEnv, destEnv)
-      console.log(`  .env.prod → ${destEnv}`)
-    }
-  }
-
-  console.log(`Migration complete → ${envDir}`)
+  const guildDir = path.resolve(target)
+  const force = argv.includes('--force')
+  syncFromCodebase(guildDir, { codebaseRoot: CODEBASE_ROOT, force })
+  console.log(`Synced tools/skills to ${guildDir}${force ? ' (forced)' : ''}`)
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────
@@ -265,9 +198,8 @@ async function main(argv: string[]) {
     else if (cmd === 'diagram') await cmdDiagram(argv[1], argv[2])
     else if (cmd === 'kumu') await cmdKumu(argv[1], argv[2])
     else if (cmd === 'mermaid') await cmdMermaid(argv[1], argv[2])
-    else if (cmd === 'init') await cmdInit(argv[1])
-    else if (cmd === 'sync') await cmdSync(argv[1], argv.includes('--force'))
-    else if (cmd === 'migrate') await cmdMigrate(argv.slice(1))
+    else if (cmd === 'init') await cmdInit(argv.slice(1))
+    else if (cmd === 'sync') await cmdSync(argv.slice(1))
     else {
       console.log('Usage: guildbot <command> [args]')
       console.log('Commands:')
@@ -275,9 +207,8 @@ async function main(argv: string[]) {
       console.log('  diagram    <transcript.txt> <graph.json>')
       console.log('  kumu       <input.txt> <output.json>')
       console.log('  mermaid    <input.txt> <output.mmd>')
-      console.log('  init       [envName]              — create/seed environment directory')
-      console.log('  sync       [envName] [--force]    — re-copy tools/skills from codebase')
-      console.log('  migrate    [--env <name>] [--from <dir>]  — move old in-repo data to env dir')
+      console.log('  init       <guild-dir>            — create/seed a new guild directory')
+      console.log('  sync       <guild-dir> [--force]  — re-copy tools/skills from codebase')
       process.exit(1)
     }
   } catch (err: any) {
@@ -290,4 +221,6 @@ if (require.main === module) {
   main(process.argv.slice(2))
 }
 
-export { cmdDiagram, cmdKumu, cmdTranscribe, cmdInit, cmdSync, cmdMigrate }
+export { cmdDiagram, cmdKumu, cmdTranscribe, cmdInit, cmdSync }
+// Silence unused-import warnings — homedir is preserved for any future helpers
+void homedir

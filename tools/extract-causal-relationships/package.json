@@ -5,7 +5,7 @@
   "type": "module",
   "dependencies": {
     "@guildbot/types": "workspace:*",
-    "@guildbot/config": "workspace:*",
+    "@guildbot/guild-config": "workspace:*",
     "@guildbot/interfaces": "workspace:*",
     "ollama": "^0.6.0",
     "zod": "^4.0.0"
