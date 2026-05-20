@@ -1,4 +1,5 @@
 import fsp from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -72,11 +73,12 @@ describe('handleMessage', () => {
   let mockReply: any
   let mockMessage: any
   let mockChannel: any
-  const TEST_SESSION_DIR = path.join(process.cwd(), '.tmp', 'test-sessions-' + Math.random().toString(36).slice(2))
+  let TEST_SESSION_DIR: string
 
   beforeEach(async () => {
     vi.clearAllMocks()
 
+    TEST_SESSION_DIR = path.join(tmpdir(), 'test-sessions-' + Math.random().toString(36).slice(2))
     ASKQUESTION_CONSTANTS.SESSION_DIR = TEST_SESSION_DIR
     await fsp.mkdir(TEST_SESSION_DIR, { recursive: true })
 
