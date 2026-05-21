@@ -21,3 +21,11 @@ export function threadMessagesFile(id: ThreadId): string {
 export function threadAttachmentsDir(id: ThreadId): string {
   return join(threadDir(id), 'attachments')
 }
+
+export function threadArchiveDir(id: ThreadId): string {
+  return join(threadDir(id), 'archive')
+}
+
+export function threadArchiveFile(id: ThreadId, compactionId: string): string {
+  return join(threadArchiveDir(id), `${compactionId}.jsonl`)
+}

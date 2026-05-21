@@ -7,10 +7,20 @@ export type ThreadMessage = {
   seq: number
   role: MessageRole
   content: string
-  kind?: 'guild-prompt' | 'standard'
+  kind?: 'guild-prompt' | 'standard' | 'compaction'
   toolName?: string
   toolCalls?: Array<{ id: string; name: string; arguments: Record<string, unknown> }>
   toolCallId?: string
+  /**
+   * For kind:'compaction' messages: the inclusive [startSeq, endSeq] of the
+   * original messages this compaction summary replaces.
+   */
+  replacesRange?: [number, number]
+  /**
+   * For kind:'compaction' messages: path (relative to the thread dir) to the
+   * archive JSONL containing the original messages.
+   */
+  archiveRef?: string
   sourceRef?: {
     platform: string
     messageId?: string
@@ -18,6 +28,13 @@ export type ThreadMessage = {
     userId?: string
   }
   ts: string
+}
+
+export type CompactionState = {
+  /** Highest seq covered by any compaction message's replacesRange[1]. */
+  lastCompactedThroughSeq?: number
+  /** Total number of compaction events committed in this thread. */
+  compactionCount: number
 }
 
 export type ThreadMeta = {
@@ -28,6 +45,12 @@ export type ThreadMeta = {
   title?: string
   parent?: { threadId: ThreadId; forkedAfterMessageId: string } | null
   systemContext?: { guildSystemPromptSnapshotPath?: string; modelHint?: string }
+  /**
+   * Cache of compaction state derived from messages.jsonl. The log is the
+   * source of truth — if this field disagrees on load, the loader reconstructs
+   * it and lazily rewrites meta.json.
+   */
+  compactionState?: CompactionState
 }
 
 export class ThreadNotFoundError extends Error {

@@ -55,6 +55,7 @@ import * as ragService from '@guildbot/rag'
 import { agentLoop } from './agent/loop'
 import { loadToolHandler } from './tools/discover'
 import { evaluateOperatorGate } from './operatorGate'
+import { formatCompactionLog, runCompactionIfNeeded } from './compaction'
 
 // Resolve the active guild dir and ensure it is seeded (data subdirs, tools, skills,
 // prompt.md, memory.md). config.json + secrets.json must already exist; the loader
@@ -1580,6 +1581,18 @@ async function handleMessageInner(message: Message) {
       await bindDiscord({ kind: 'reply', key: reply.id, threadId })
     } catch (e) {
       console.warn('Failed to bind assistant reply to thread', e)
+    }
+
+    // Compaction runs after the agent loop has returned its final user-visible
+    // assistant message — never mid-loop. Compaction is invisible to Discord:
+    // no notice is posted to the channel. Errors here are logged and swallowed
+    // so the user's reply still lands.
+    try {
+      const compaction = await runCompactionIfNeeded(threadId)
+      const line = formatCompactionLog(threadId, compaction)
+      if (line) console.log(line)
+    } catch (e) {
+      console.warn('[compaction] post-turn check failed', e)
     }
   } catch (e) {
     try {

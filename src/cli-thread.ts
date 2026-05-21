@@ -23,6 +23,7 @@ import {
   type ThreadMessage,
 } from '@guildbot/threads'
 import { agentLoop } from './agent/loop'
+import { formatCompactionLog, runCompactionIfNeeded } from './compaction'
 
 type Argv = string[]
 
@@ -115,6 +116,61 @@ async function cmdThreadFork(argv: Argv) {
 
 // ── thread chat ─────────────────────────────────────────────────────────────
 
+export type CliChatTurnResult = {
+  answer: string
+  compactionLine: string
+}
+
+/**
+ * Single CLI chat turn. Exposed so tests can drive a synthetic turn without
+ * stdin/readline. Returns the agent's answer plus the compaction log line
+ * (empty when no compaction fired). The caller logs in user-visible order.
+ */
+export async function runCliChatTurn(
+  id: string,
+  input: string,
+): Promise<CliChatTurnResult> {
+  const meta = await loadThread(id)
+  const history: ThreadMessage[] = await readMessages(id)
+  await appendMessage(id, {
+    role: 'user',
+    content: input,
+    sourceRef: { platform: 'cli', userId: process.env.USER ?? 'cli' },
+  })
+
+  const answer = await agentLoop({
+    userMessage: input,
+    conversationHistory: history,
+    context: {
+      guildId: meta.guildId,
+      channelId: 'cli',
+      userId: process.env.USER ?? 'cli',
+      sessionDir: paths().sessions,
+      threadId: id,
+    } as any,
+    model: loadConfig().llm.models.default,
+    onMessage: async (m) => {
+      await appendMessage(id, {
+        role: m.role,
+        content: m.content,
+        toolName: m.toolName,
+        toolCallId: m.toolCallId,
+        toolCalls: m.toolCalls,
+      })
+    },
+  })
+
+  // Compaction after the agent loop's final assistant message — never mid-loop.
+  let compactionLine = ''
+  try {
+    const compaction = await runCompactionIfNeeded(id)
+    compactionLine = formatCompactionLog(id, compaction)
+  } catch (e: any) {
+    console.warn('[compaction] post-turn check failed:', e?.message ?? e)
+  }
+  return { answer, compactionLine }
+}
+
 async function cmdThreadChat(argv: Argv) {
   const id = argv[0]
   if (!id) throw new Error('Usage: thread chat <threadId>')
@@ -134,37 +190,10 @@ async function cmdThreadChat(argv: Argv) {
     while (true) {
       const input = (await ask('> '))?.trim()
       if (!input || input === 'exit' || input === 'quit') break
-
-      const history: ThreadMessage[] = await readMessages(id)
-      await appendMessage(id, {
-        role: 'user',
-        content: input,
-        sourceRef: { platform: 'cli', userId: process.env.USER ?? 'cli' },
-      })
-
       try {
-        const answer = await agentLoop({
-          userMessage: input,
-          conversationHistory: history,
-          context: {
-            guildId: meta.guildId,
-            channelId: 'cli',
-            userId: process.env.USER ?? 'cli',
-            sessionDir: paths().sessions,
-            threadId: id,
-          } as any,
-          model: loadConfig().llm.models.default,
-          onMessage: async (m) => {
-            await appendMessage(id, {
-              role: m.role,
-              content: m.content,
-              toolName: m.toolName,
-              toolCallId: m.toolCallId,
-              toolCalls: m.toolCalls,
-            })
-          },
-        })
+        const { answer, compactionLine } = await runCliChatTurn(id, input)
         console.log(answer)
+        if (compactionLine) console.log(compactionLine)
       } catch (e: any) {
         console.error('Error:', e?.message ?? e)
       }

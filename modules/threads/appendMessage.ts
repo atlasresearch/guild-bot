@@ -14,9 +14,10 @@ export async function appendMessage(
   msg: AppendInput,
 ): Promise<ThreadMessage> {
   return withThreadLock(id, async () => {
-    // Read current messages to assign next seq. Stays inside the lock so
+    // Read the raw current log to assign next seq and to rewrite the file
+    // atomically without losing compacted originals. Stays inside the lock so
     // concurrent appends are linearised.
-    const existing = await readMessages(id)
+    const existing = await readMessages(id, { collapseCompactions: false })
     const nextSeq = existing.length === 0 ? 1 : existing[existing.length - 1].seq + 1
     const now = new Date().toISOString()
     const fullMessage: ThreadMessage = {

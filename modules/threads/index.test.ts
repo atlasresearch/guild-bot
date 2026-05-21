@@ -204,7 +204,22 @@ describe('@guildbot/threads', () => {
     it('does not import discord.js', async () => {
       const fs = require('node:fs') as typeof import('node:fs')
       const path = require('node:path') as typeof import('node:path')
-      const files = ['createThread.ts', 'appendMessage.ts', 'forkThread.ts', 'readMessages.ts', 'index.ts', 'loadThread.ts', 'listThreads.ts', 'mutex.ts', 'paths.ts', 'types.ts']
+      const files = [
+        'createThread.ts',
+        'appendMessage.ts',
+        'forkThread.ts',
+        'readMessages.ts',
+        'index.ts',
+        'loadThread.ts',
+        'listThreads.ts',
+        'mutex.ts',
+        'paths.ts',
+        'types.ts',
+        // Plan 008 additions:
+        'compactThread.ts',
+        'estimateTokens.ts',
+        'maybeCompactThread.ts',
+      ]
       // Look for actual import statements only — comments referencing the
       // forbidden modules are fine.
       const importPattern = /(?:from\s+['"]|require\(\s*['"])([^'"\)]+)['"]/g
