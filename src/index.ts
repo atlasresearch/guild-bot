@@ -9,13 +9,30 @@ import {
   Interaction,
   Message,
   Partials,
+  PermissionFlagsBits,
   TextBasedChannel,
   TextChannel
 } from 'discord.js'
 
 import fs from 'fs/promises'
 import { join } from 'node:path'
-import { initGuildDir, loadConfig, paths, resolveGuildDir } from '@guildbot/guild-config'
+import {
+  diffAgainstDefault,
+  forgetMemory,
+  initGuildDir,
+  listHistory,
+  loadConfig,
+  loadMemory,
+  loadPrompt,
+  paths,
+  renderGuildSystemMessage,
+  resolveGuildDir,
+  revert as revertPromptOrMemory,
+  updateMemory,
+  updatePrompt,
+} from '@guildbot/guild-config'
+import { structured } from '@guildbot/llm'
+import { z } from 'zod'
 import {
   ensureSession,
   formatAttachmentsForPrompt,
@@ -37,6 +54,7 @@ import * as messageProcessor from '@guildbot/message-processor'
 import * as ragService from '@guildbot/rag'
 import { agentLoop } from './agent/loop'
 import { loadToolHandler } from './tools/discover'
+import { evaluateOperatorGate } from './operatorGate'
 
 // Resolve the active guild dir and ensure it is seeded (data subdirs, tools, skills,
 // prompt.md, memory.md). config.json + secrets.json must already exist; the loader
@@ -349,7 +367,128 @@ client.once('ready', async () => {
               options: [
                 { name: 'question', description: 'Question', type: ApplicationCommandOptionType.String, required: true }
               ]
-            }
+            },
+            {
+              name: 'prompt',
+              description: 'Manage the guild system prompt (operators only)',
+              type: ApplicationCommandOptionType.SubcommandGroup,
+              options: [
+                {
+                  name: 'show',
+                  description: 'Show the current prompt',
+                  type: ApplicationCommandOptionType.Subcommand,
+                },
+                {
+                  name: 'set',
+                  description: 'Set the prompt body (inline text or uploaded file)',
+                  type: ApplicationCommandOptionType.Subcommand,
+                  options: [
+                    {
+                      name: 'body',
+                      description: 'Inline body (use file for long content)',
+                      type: ApplicationCommandOptionType.String,
+                      required: false,
+                    },
+                    {
+                      name: 'file',
+                      description: 'Markdown file to use as the body',
+                      type: ApplicationCommandOptionType.Attachment,
+                      required: false,
+                    },
+                  ],
+                },
+                {
+                  name: 'history',
+                  description: 'List prior prompt versions',
+                  type: ApplicationCommandOptionType.Subcommand,
+                },
+                {
+                  name: 'revert',
+                  description: 'Revert prompt to a prior version',
+                  type: ApplicationCommandOptionType.Subcommand,
+                  options: [
+                    {
+                      name: 'timestamp',
+                      description: 'Timestamp (or filename) from history',
+                      type: ApplicationCommandOptionType.String,
+                      required: true,
+                    },
+                  ],
+                },
+                {
+                  name: 'diff',
+                  description: 'Show diff against the bundled default',
+                  type: ApplicationCommandOptionType.Subcommand,
+                },
+              ],
+            },
+            {
+              name: 'memory',
+              description: 'Manage the guild long-term memory (operators only)',
+              type: ApplicationCommandOptionType.SubcommandGroup,
+              options: [
+                {
+                  name: 'show',
+                  description: 'Show the current memory',
+                  type: ApplicationCommandOptionType.Subcommand,
+                },
+                {
+                  name: 'set',
+                  description: 'Set the memory body (inline text or uploaded file)',
+                  type: ApplicationCommandOptionType.Subcommand,
+                  options: [
+                    {
+                      name: 'body',
+                      description: 'Inline body (use file for long content)',
+                      type: ApplicationCommandOptionType.String,
+                      required: false,
+                    },
+                    {
+                      name: 'file',
+                      description: 'Markdown file to use as the body',
+                      type: ApplicationCommandOptionType.Attachment,
+                      required: false,
+                    },
+                  ],
+                },
+                {
+                  name: 'history',
+                  description: 'List prior memory versions',
+                  type: ApplicationCommandOptionType.Subcommand,
+                },
+                {
+                  name: 'revert',
+                  description: 'Revert memory to a prior version',
+                  type: ApplicationCommandOptionType.Subcommand,
+                  options: [
+                    {
+                      name: 'timestamp',
+                      description: 'Timestamp (or filename) from history',
+                      type: ApplicationCommandOptionType.String,
+                      required: true,
+                    },
+                  ],
+                },
+                {
+                  name: 'forget',
+                  description: 'LLM-assisted removal of memory matching a natural-language pattern',
+                  type: ApplicationCommandOptionType.Subcommand,
+                  options: [
+                    {
+                      name: 'pattern',
+                      description: 'Natural-language description of what to forget',
+                      type: ApplicationCommandOptionType.String,
+                      required: true,
+                    },
+                  ],
+                },
+                {
+                  name: 'diff',
+                  description: 'Show diff against the bundled default',
+                  type: ApplicationCommandOptionType.Subcommand,
+                },
+              ],
+            },
           ]
         }
       ]
@@ -459,6 +598,196 @@ async function safeInteractionReply(
   }
 }
 
+/**
+ * Operator gate. Members with role IDs in config.memory.operatorRoleIds are
+ * allowed. When that list is empty, only Discord guild administrators are
+ * allowed. Returns { ok: true } when authorised; otherwise an error message
+ * that should be shown to the user.
+ */
+function checkOperatorGate(chat: ChatInputCommandInteraction):
+  | { ok: true }
+  | { ok: false; reason: string } {
+  const member: any = chat.member
+  if (!member) return { ok: false, reason: 'This command must be used inside a guild.' }
+
+  const perms = member.permissions
+  const isAdministrator =
+    perms && typeof perms.has === 'function'
+      ? perms.has(PermissionFlagsBits.Administrator)
+      : false
+
+  const memberRoleIds: string[] = (() => {
+    const r = member.roles
+    if (!r) return []
+    if (Array.isArray(r)) return r as string[]
+    if (typeof r.cache?.keys === 'function') return Array.from(r.cache.keys()) as string[]
+    return []
+  })()
+
+  return evaluateOperatorGate({
+    memberRoleIds,
+    isAdministrator,
+    operatorRoleIds: loadConfig().memory.operatorRoleIds,
+  })
+}
+
+async function readAttachmentBody(url: string): Promise<string> {
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw new Error(`Failed to download attachment: HTTP ${res.status}`)
+  }
+  return res.text()
+}
+
+const FORGET_SCHEMA = z.object({
+  rewrittenMemory: z.string(),
+  removed: z.array(z.string()),
+})
+
+async function handlePromptOrMemoryCommand(
+  chat: ChatInputCommandInteraction,
+  group: 'prompt' | 'memory',
+  sub: string,
+): Promise<void> {
+  const isMutating = sub !== 'show' && sub !== 'history' && sub !== 'diff'
+
+  if (isMutating) {
+    const gate = checkOperatorGate(chat)
+    if (!gate.ok) {
+      await chat.editReply(gate.reason)
+      return
+    }
+  }
+
+  if (sub === 'show') {
+    const v = group === 'prompt' ? await loadPrompt() : await loadMemory()
+    const header = `**${group}** (v${v.version}, updated ${v.updatedAt})`
+    const body = v.content.trim() ? v.content : '(empty)'
+    const payload = `${header}\n\n${body}`
+    if (payload.length > 1900) {
+      const att = new AttachmentBuilder(Buffer.from(payload, 'utf8'), {
+        name: `${group}.md`,
+      })
+      await chat.editReply({ content: header, files: [att] })
+    } else {
+      await chat.editReply(payload)
+    }
+    return
+  }
+
+  if (sub === 'history') {
+    const entries = listHistory(group)
+    if (entries.length === 0) {
+      await chat.editReply(`No ${group} history entries yet.`)
+      return
+    }
+    const lines = entries
+      .slice(0, 20)
+      .map((e) => `• \`${e.filename}\` — ${e.timestamp || '?'} — ${e.reason} (${e.size} bytes)`)
+    const more = entries.length > 20 ? `\n…and ${entries.length - 20} more` : ''
+    await chat.editReply(`Recent ${group} history:\n${lines.join('\n')}${more}`)
+    return
+  }
+
+  if (sub === 'diff') {
+    const diff = await diffAgainstDefault(group)
+    if (!diff) {
+      await chat.editReply(`${group}.md matches the bundled default.`)
+      return
+    }
+    if (diff.length > 1900) {
+      await chat.editReply({
+        content: `Diff vs bundled default:`,
+        files: [new AttachmentBuilder(Buffer.from(diff, 'utf8'), { name: `${group}.diff` })],
+      })
+    } else {
+      await chat.editReply(`Diff vs bundled default:\n\`\`\`diff\n${diff}\n\`\`\``)
+    }
+    return
+  }
+
+  if (sub === 'set') {
+    const inline = chat.options.getString('body', false) ?? undefined
+    const attachment = chat.options.getAttachment('file', false)
+    let body: string | undefined
+    if (attachment) {
+      body = await readAttachmentBody(attachment.url)
+    } else if (inline) {
+      body = inline
+    }
+    if (!body) {
+      await chat.editReply('Provide either `body` or a markdown `file` attachment.')
+      return
+    }
+    const reason = `operator:${chat.user.id}`
+    try {
+      const result =
+        group === 'prompt'
+          ? await updatePrompt(body, { reason })
+          : await updateMemory(body, { reason })
+      await chat.editReply(`Updated ${group}.md to v${result.version}.`)
+    } catch (e: any) {
+      await chat.editReply(`Rejected: ${e?.message ?? e}`)
+    }
+    return
+  }
+
+  if (sub === 'revert') {
+    const target = chat.options.getString('timestamp', true)
+    try {
+      const result = await revertPromptOrMemory(
+        group,
+        target,
+        `operator:${chat.user.id}`,
+      )
+      await chat.editReply(
+        `Reverted ${group}.md to history entry "${target}". Now v${result.version}.`,
+      )
+    } catch (e: any) {
+      await chat.editReply(`Revert failed: ${e?.message ?? e}`)
+    }
+    return
+  }
+
+  if (sub === 'forget' && group === 'memory') {
+    const pattern = chat.options.getString('pattern', true)
+    try {
+      const result = await forgetMemory(pattern, {
+        runStructured: async (prompt) => {
+          const r = await structured({
+            schema: FORGET_SCHEMA,
+            schemaName: 'memory_forget',
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You rewrite a guild bot memory file with content removed per the operator pattern.',
+              },
+              { role: 'user', content: prompt },
+            ],
+          })
+          if (!r.success) {
+            throw new Error(`LLM forget failed: ${r.error}`)
+          }
+          return r.data
+        },
+      })
+      const removedSummary =
+        result.removed.length === 0
+          ? 'No matching entries found.'
+          : `Removed ${result.removed.length} entries.`
+      await chat.editReply(
+        `Memory forget applied — now v${result.after.version}. ${removedSummary}`,
+      )
+    } catch (e: any) {
+      await chat.editReply(`Forget failed: ${e?.message ?? e}`)
+    }
+    return
+  }
+
+  await chat.editReply(`Unknown subcommand: ${group} ${sub}`)
+}
+
 export async function handleInteraction(interaction: Interaction) {
   try {
     await handleInteractionInner(interaction)
@@ -476,8 +805,18 @@ async function handleInteractionInner(interaction: Interaction) {
   const chat = interaction as ChatInputCommandInteraction
 
   if (chat.commandName === 'guild') {
+    const group = chat.options.getSubcommandGroup(false)
     const sub = chat.options.getSubcommand()
     await chat.deferReply()
+
+    if (group === 'prompt' || group === 'memory') {
+      try {
+        await handlePromptOrMemoryCommand(chat, group, sub)
+      } catch (e: any) {
+        await chat.editReply(`Error: ${e?.message ?? e}`)
+      }
+      return
+    }
 
     try {
       if (sub === 'search') {
@@ -1043,17 +1382,9 @@ async function resolveExistingThread(message: Message): Promise<string | undefin
   return undefined
 }
 
-/**
- * Read the guild's system prompt from disk. Plan 006 will own this; until then
- * we read prompt.md directly. Returns empty string if the file is absent.
- */
-async function readGuildSystemPrompt(): Promise<string> {
-  try {
-    return await fs.readFile(paths().prompt, 'utf8')
-  } catch {
-    return ''
-  }
-}
+// Prompt + memory injection lives in @guildbot/guild-config. Plan 007 R3.1:
+// the dispatcher MUST call renderGuildSystemMessage() and append the result
+// as the new thread's first message (kind: 'guild-prompt').
 
 async function handleMessageInner(message: Message) {
   if (message.author.bot || message.system) return
@@ -1115,19 +1446,23 @@ async function handleMessageInner(message: Message) {
   const guildId = message.guildId ?? 'unknown'
 
   // Create a guild-bot thread if we don't have one yet. Seed it with the
-  // guild's system prompt as kind:'guild-prompt' (plan 005 system-prompt seeding).
+  // rendered guild prompt + memory as kind:'guild-prompt'. The snapshot path
+  // is recorded on the thread's meta for later auditing.
   if (!threadId) {
+    const rendered = await renderGuildSystemMessage()
     const created = await createThread({
       guildId: `discord:${guildId}`,
       title: question.slice(0, 80) || undefined,
+      systemContext: {
+        guildSystemPromptSnapshotPath: rendered.snapshotPath,
+      },
     })
     threadId = created.id
-    const guildPrompt = await readGuildSystemPrompt()
-    if (guildPrompt.trim()) {
+    if (rendered.content.trim()) {
       await appendMessage(threadId, {
         role: 'system',
         kind: 'guild-prompt',
-        content: guildPrompt,
+        content: rendered.content,
       })
     }
     if (createdDiscordThreadChannelId) {

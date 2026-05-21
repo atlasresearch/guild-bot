@@ -63,6 +63,7 @@ describe('handleInteraction - Tagging', () => {
       commandName: 'guild',
       options: {
         getSubcommand: vi.fn().mockReturnValue('tag'),
+        getSubcommandGroup: vi.fn().mockReturnValue(null),
         getString: vi.fn((key) => {
           if (key === 'tags') return 'tag1, tag2'
           return null

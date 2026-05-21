@@ -27,7 +27,19 @@ describe('initGuildDir', () => {
 
   it('creates all data subdirs', () => {
     initGuildDir(guildDir, { codebaseRoot })
-    for (const sub of ['db', 'recordings', 'sessions', 'sessions/context', 'media', 'exports', 'threads', 'memory-history', 'snapshots']) {
+    for (const sub of [
+      'db',
+      'recordings',
+      'sessions',
+      'sessions/context',
+      'media',
+      'exports',
+      'threads',
+      'history',
+      'history/prompt',
+      'history/memory',
+      'snapshots',
+    ]) {
       expect(existsSync(join(guildDir, sub)), `missing ${sub}`).toBe(true)
     }
   })

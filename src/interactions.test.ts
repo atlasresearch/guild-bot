@@ -54,6 +54,7 @@ describe('handleInteraction', () => {
       channelId: 'channel-123',
       options: {
         getSubcommand: vi.fn(),
+        getSubcommandGroup: vi.fn().mockReturnValue(null),
         getString: vi.fn()
       },
       deferReply: vi.fn().mockResolvedValue({}),

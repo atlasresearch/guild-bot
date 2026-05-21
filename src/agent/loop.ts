@@ -42,23 +42,19 @@ export type AgentLoopOptions = {
   onMessage?: OnAgentMessage
 }
 
+// The loop owns ONLY the skill-list system message. Identity / norms / voice
+// live in the guild's prompt.md and are injected as the thread's first
+// message (kind: 'guild-prompt') by the dispatcher — see plan 007.
 export function buildSystemPrompt(
   skillDescriptions: Array<{ name: string; description: string }>
 ): string {
-  return `You are Guild Bot, a helpful assistant for a Discord community.
-
-You have access to tools. You also know about these skills:
+  if (skillDescriptions.length === 0) {
+    return 'You have access to tools. Use them to answer questions; do not refuse or hallucinate.'
+  }
+  return `You have access to tools and these skills:
 ${skillDescriptions.map((s) => `- **${s.name}**: ${s.description}`).join('\n')}
 
-Rules:
-- ALWAYS use tools to answer questions — do not refuse or say you cannot access data. Try first.
-- For broad questions like "what have we talked about", use search_messages with a general query.
-- For questions that need a synthesized answer, use ask_knowledge_base.
-- For audio/video content, use transcribe_audio first, then other tools on the result.
-- Do not guess or hallucinate facts — if you need information, search for it.
-- Never ask the user for permission to use a tool. Just use it.
-- Keep responses concise and actionable.
-- When you have enough information, respond directly without calling more tools.`
+Use tools to answer questions; do not refuse or hallucinate. When you have enough information, respond directly without calling more tools.`
 }
 
 export async function agentLoop(options: AgentLoopOptions): Promise<string> {

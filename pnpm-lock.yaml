@@ -207,6 +207,12 @@ importers:
 
   modules/guild-config:
     dependencies:
+      '@guildbot/interfaces':
+        specifier: workspace:*
+        version: link:../interfaces
+      '@guildbot/llm-edit':
+        specifier: workspace:*
+        version: link:../llm-edit
       zod:
         specifier: ^4.0.0
         version: 4.4.3

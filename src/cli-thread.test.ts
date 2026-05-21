@@ -108,7 +108,9 @@ describe('guildbot thread CLI', () => {
     expect(joined).toContain(t.id)
     expect(joined).toContain('first user turn')
     expect(joined).toContain('first reply')
-    expect(joined).toContain('messages:  2')
+    // The thread is created with a guild-prompt system message + the two
+    // turns we appended above = 3 messages total.
+    expect(joined).toContain('messages:  3')
   })
 
   it('thread fork creates a new thread parented at --after <messageId>', async () => {

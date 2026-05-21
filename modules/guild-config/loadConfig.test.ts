@@ -231,6 +231,54 @@ describe('loadConfig', () => {
     expect(() => loadConfig(guildDir)).toThrowError(/brace expansion/)
   })
 
+  // guild.id namespacing (plan 007 R1.5 / R6.8)
+  it('rejects a bare snowflake guild.id (must be namespaced)', () => {
+    writeConfig(guildDir, {
+      ...VALID_CONFIG,
+      guild: { id: '123456789012345678', name: 'bare-snowflake' },
+    })
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    expect(() => loadConfig(guildDir)).toThrowError(/namespaced/)
+  })
+
+  it('rejects guild.id without a colon', () => {
+    writeConfig(guildDir, {
+      ...VALID_CONFIG,
+      guild: { id: 'no-colon-here', name: 'bad' },
+    })
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    expect(() => loadConfig(guildDir)).toThrowError(/namespaced/)
+  })
+
+  it('rejects guild.id with multiple colons', () => {
+    writeConfig(guildDir, {
+      ...VALID_CONFIG,
+      guild: { id: 'discord:abc:def', name: 'multi-colon' },
+    })
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    expect(() => loadConfig(guildDir)).toThrowError(/namespaced/)
+  })
+
+  it('accepts a discord-namespaced guild.id', () => {
+    writeConfig(guildDir, {
+      ...VALID_CONFIG,
+      guild: { id: 'discord:123456789012345678', name: 'ok' },
+    })
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    const cfg = loadConfig(guildDir)
+    expect(cfg.guild.id).toBe('discord:123456789012345678')
+  })
+
+  it('accepts a cli-namespaced guild.id', () => {
+    writeConfig(guildDir, {
+      ...VALID_CONFIG,
+      guild: { id: 'cli:my-local-guild', name: 'cli' },
+    })
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    const cfg = loadConfig(guildDir)
+    expect(cfg.guild.id).toBe('cli:my-local-guild')
+  })
+
   // Happy path
   it('returns a fully resolved config with $secret values substituted', () => {
     writeConfig(guildDir, {

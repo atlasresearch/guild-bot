@@ -22,3 +22,33 @@ export type {
   SecretsFile,
 } from './schema'
 export { isSecretRef } from './schema'
+
+// plan 007 — per-guild prompt + memory
+export {
+  loadPrompt,
+  loadMemory,
+  updatePrompt,
+  updateMemory,
+  renderGuildSystemMessage,
+  unifiedDiff,
+  CANONICAL_MEMORY_HEADINGS,
+  type GuildPrompt,
+  type GuildMemory,
+  type UpdateOptions,
+  type RenderedGuildSystemMessage,
+} from './promptMemory'
+export {
+  parseFrontmatter,
+  serializeWithFrontmatter,
+  type Frontmatter,
+  type ParsedFile,
+} from './frontmatter'
+export {
+  listHistory,
+  revert,
+  defaultPath,
+  diffAgainstDefault,
+  forgetMemory,
+  type HistoryEntry,
+  type ForgetResult,
+} from './promptMemoryOps'

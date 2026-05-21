@@ -309,7 +309,9 @@ describe('buildSystemPrompt', () => {
 
   it('should produce a valid prompt with empty skill list', () => {
     const prompt = buildSystemPrompt([])
-    expect(prompt).toContain('Guild Bot')
+    // Identity text now lives in guild-defaults/prompt.md and is injected per
+    // thread by the dispatcher. The loop only contributes tool-usage guidance.
+    expect(prompt).toContain('tools')
     expect(typeof prompt).toBe('string')
     expect(prompt.length).toBeGreaterThan(0)
   })

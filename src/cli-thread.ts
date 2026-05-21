@@ -11,7 +11,7 @@
 // --guild-dir <path>). They call straight into @guildbot/threads.
 
 import readline from 'node:readline'
-import { loadConfig, paths } from '@guildbot/guild-config'
+import { loadConfig, paths, renderGuildSystemMessage } from '@guildbot/guild-config'
 import {
   appendMessage,
   createThread,
@@ -85,7 +85,19 @@ async function cmdThreadShow(argv: Argv) {
 async function cmdThreadNew(argv: Argv) {
   const guildId = getFlag(argv, 'guild') ?? loadConfig().guild.id
   const title = getFlag(argv, 'title')
-  const meta = await createThread({ guildId, title })
+  const rendered = await renderGuildSystemMessage()
+  const meta = await createThread({
+    guildId,
+    title,
+    systemContext: { guildSystemPromptSnapshotPath: rendered.snapshotPath },
+  })
+  if (rendered.content.trim()) {
+    await appendMessage(meta.id, {
+      role: 'system',
+      kind: 'guild-prompt',
+      content: rendered.content,
+    })
+  }
   console.log(meta.id)
 }
 

@@ -16,6 +16,8 @@ export type GuildPaths = {
   skills: string
   prompt: string
   memory: string
+  history: string
+  promptHistory: string
   memoryHistory: string
   snapshots: string
 }
@@ -41,7 +43,9 @@ export function paths(guildDir?: string): GuildPaths {
     skills: join(root, 'skills'),
     prompt: join(root, 'prompt.md'),
     memory: join(root, 'memory.md'),
-    memoryHistory: join(root, 'memory-history'),
+    history: join(root, 'history'),
+    promptHistory: join(root, 'history', 'prompt'),
+    memoryHistory: join(root, 'history', 'memory'),
     snapshots: join(root, 'snapshots'),
   }
 }
@@ -54,6 +58,8 @@ export const DATA_SUBDIRS = [
   'media',
   'exports',
   'threads',
-  'memory-history',
+  'history',
+  'history/prompt',
+  'history/memory',
   'snapshots',
 ] as const

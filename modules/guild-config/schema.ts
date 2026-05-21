@@ -48,9 +48,20 @@ export const llmDialectSchema = z.enum([
 ])
 export type LlmDialect = z.infer<typeof llmDialectSchema>
 
+// guild.id MUST be namespaced: discord:<snowflake>, cli:<name>, web:<id>, etc.
+// Bare snowflakes are rejected so the bot can route per-platform without
+// guessing the platform from context.
+const guildIdSchema = z
+  .string()
+  .min(1, 'guild.id must be non-empty')
+  .regex(
+    /^[a-z]+:[^:]+$/,
+    'guild.id must be namespaced (e.g. "discord:<snowflake>", "cli:<name>")',
+  )
+
 export const guildBlockSchema = z
   .object({
-    id: z.string().min(1, 'guild.id must be non-empty'),
+    id: guildIdSchema,
     name: z.string().min(1, 'guild.name must be non-empty'),
     description: z.string().optional(),
   })
