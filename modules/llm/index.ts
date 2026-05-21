@@ -74,6 +74,28 @@ export type StructuredResult<T> =
   | { success: true; data: T }
   | { success: false; error: string }
 
+/**
+ * Walk an error's `cause` chain and return a single human-readable string.
+ *
+ * Node's undici wraps low-level network failures as a generic `Error("fetch
+ * failed")` with the real reason (ECONNREFUSED, ETIMEDOUT, UND_ERR_*, etc.)
+ * hidden in `err.cause`. Surfacing only `err.message` loses every clue. This
+ * walks up to three levels deep and includes the code if present.
+ */
+function formatErrorChain(e: unknown): string {
+  const parts: string[] = []
+  let cur: any = e
+  let depth = 0
+  while (cur && depth < 4) {
+    const msg = cur?.message ?? String(cur)
+    const code = cur?.code ? ` [${cur.code}]` : ''
+    parts.push(`${msg}${code}`)
+    cur = cur?.cause
+    depth++
+  }
+  return parts.join(' ← caused by: ')
+}
+
 export async function structured<T>(opts: StructuredOptions<T>): Promise<StructuredResult<T>> {
   const sel = selectFor('structured')
   const model = opts.model ?? sel.model
@@ -102,7 +124,15 @@ export async function structured<T>(opts: StructuredOptions<T>): Promise<Structu
       : 'json',
   }
 
-  const resp = await chat(req)
+  let resp: LlmChatResponse
+  try {
+    resp = await chat(req)
+  } catch (e) {
+    return {
+      success: false,
+      error: `LLM request failed (provider=${sel.provider} model=${model} baseUrl=${sel.baseUrl ?? '<none>'}): ${formatErrorChain(e)}`,
+    }
+  }
 
   let parsed: unknown
   try {

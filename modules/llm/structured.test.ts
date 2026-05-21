@@ -83,6 +83,27 @@ describe('structured()', () => {
     }
   })
 
+  it('surfaces the underlying cause chain when the provider call throws', async () => {
+    // Reproduces the user-visible "Failed to generate meeting digest: fetch
+    // failed" — undici wraps the real reason (ECONNREFUSED, UND_ERR_*, …) in
+    // err.cause, which used to be lost. structured() must walk the chain and
+    // include provider + baseUrl so the operator can debug.
+    const inner: any = new Error('connect ECONNREFUSED 127.0.0.1:11434')
+    inner.code = 'ECONNREFUSED'
+    const outer: any = new Error('fetch failed')
+    outer.cause = inner
+    mockOllamaChat.mockRejectedValue(outer)
+
+    const result = await structured({ schema: Schema, messages: [{ role: 'user', content: 'x' }] })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toMatch(/fetch failed/)
+      expect(result.error).toMatch(/ECONNREFUSED/)
+      expect(result.error).toMatch(/caused by/)
+      expect(result.error).toMatch(/provider=ollama/)
+    }
+  })
+
   it('forwards thinking option to the underlying chat()', async () => {
     mockOllamaChat.mockResolvedValue({
       message: { role: 'assistant', content: '{"decision":"x"}' },
