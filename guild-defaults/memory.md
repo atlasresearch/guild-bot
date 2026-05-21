@@ -3,22 +3,12 @@ version: 0
 updatedAt: 2026-05-21T00:00:00.000Z
 ---
 
-<!-- scope: medium-term, persist-across-threads -->
 <!--
-  This file holds CRITICAL details that should persist across threads —
-  guild-level identity, ongoing projects, decisions, learned norms about
-  specific people. It is NOT a record of every event/person/thing/idea
-  the bot has encountered. Broader human-like memory will be added later
-  via a graph-based knowledge tool.
-
-  The top-level headings below are canonical and enforced. Hand-edits MAY
-  add bullets under each, but MUST NOT rename, remove, or add headings.
+  This file is the guild's long-term memory. Its structure is operator-defined —
+  add whatever headings, bullets, or freeform notes you want the bot to remember
+  across threads. If you want the bot to update it a particular way at compaction
+  time, encode that preference in prompt.md (e.g. "keep memory.md grouped under
+  # People / # Decisions / # Open questions"). No structure is enforced by code.
 -->
 
-# People
-
-# Ongoing projects
-
-# Decisions
-
-# Norms learned
+(empty — the bot will populate this over time, or you can pre-seed it via `guildbot memory set`)

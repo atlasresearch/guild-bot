@@ -14,7 +14,7 @@ export type Edit =
 export type ApplyOptions = {
   /**
    * Optional validator run on the post-edit content before commit. Throws to reject.
-   * Common use: Zod schema, canonical-headings check, byte cap, secret-pattern denylist.
+   * Common use: non-empty body, byte cap, secret-pattern denylist, Zod schema.
    */
   validate?: (newContent: string) => void | Promise<void>
 }

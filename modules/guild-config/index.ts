@@ -31,7 +31,6 @@ export {
   updateMemory,
   renderGuildSystemMessage,
   unifiedDiff,
-  CANONICAL_MEMORY_HEADINGS,
   type GuildPrompt,
   type GuildMemory,
   type UpdateOptions,

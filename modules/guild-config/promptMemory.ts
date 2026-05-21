@@ -7,8 +7,9 @@
 //   snapshots/<sha256-16>.md        — content-addressed renders for thread injection
 //
 // All mutating calls route through @guildbot/llm-edit's applyEdits() with a
-// content-specific validator, so the canonical-heading rule (R1.6) is enforced
-// on every write path: operator, compactor, and forget.
+// minimal validator (non-empty, byte cap, secret denylist) so every write
+// path applies the same safety floor. Structure of memory.md is intentionally
+// operator-defined — no canonical headings, no ontology.
 
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
@@ -18,6 +19,7 @@ import { join } from 'node:path'
 import { atomicWrite } from '@guildbot/interfaces'
 import { applyEdits } from '@guildbot/llm-edit'
 
+import { loadConfig } from './loadConfig'
 import { paths } from './paths'
 import {
   parseFrontmatter,
@@ -48,15 +50,6 @@ export type UpdateOptions = {
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
-
-export const CANONICAL_MEMORY_HEADINGS = [
-  '# People',
-  '# Ongoing projects',
-  '# Decisions',
-  '# Norms learned',
-] as const
-
-const RENDER_HEADING = '## Long-term memory'
 
 // Detect Discord token + a few common API-key shapes. The compactor (plan 008)
 // owns the more aggressive denylist; here we just refuse the obviously
@@ -130,38 +123,18 @@ export async function loadMemory(): Promise<GuildMemory> {
 // ── Validators ──────────────────────────────────────────────────────────────
 
 /**
- * Enforce R1.6 — `memory.md`'s body MUST contain exactly the canonical
- * top-level headings, in any order, with no extras. The frontmatter is not
- * part of the body passed to applyEdits, so we operate on the body directly.
- *
- * Plus secret-pattern denylist (R2.8 / plan 008 R4.4 hand-off).
+ * Memory validator: non-empty body, byte cap, and a hardcoded secret-pattern
+ * denylist. Structure is intentionally NOT enforced — operators encode whatever
+ * organisation makes sense for their guild directly in `memory.md`, and the
+ * LLM-driven extractor in plan 008 takes its cues from that file's content.
  */
-function validateMemoryBody(body: string): void {
-  const lines = body.split(/\r?\n/)
-  const topHeadings = lines.filter((l) => /^#\s+/.test(l)).map((l) => l.trim())
-
-  const canonical = new Set<string>(CANONICAL_MEMORY_HEADINGS)
-  const seen = new Set<string>()
-
-  for (const h of topHeadings) {
-    if (!canonical.has(h)) {
-      throw new Error(
-        `memory.md may only contain the canonical top-level headings ` +
-          `(${CANONICAL_MEMORY_HEADINGS.join(', ')}). Unexpected heading: "${h}".`,
-      )
-    }
-    if (seen.has(h)) {
-      throw new Error(`memory.md heading appears more than once: "${h}".`)
-    }
-    seen.add(h)
+function validateMemoryBody(body: string, maxBytes: number): void {
+  if (!body.trim()) {
+    throw new Error('memory.md body must not be empty.')
   }
-
-  for (const required of CANONICAL_MEMORY_HEADINGS) {
-    if (!seen.has(required)) {
-      throw new Error(`memory.md is missing the required heading: "${required}".`)
-    }
+  if (Buffer.byteLength(body, 'utf8') > maxBytes) {
+    throw new Error(`memory.md body exceeds the byte cap (${maxBytes} bytes).`)
   }
-
   for (const { name, re } of SECRET_PATTERNS) {
     if (re.test(body)) {
       throw new Error(`memory.md may not contain ${name}-shaped secrets.`)
@@ -249,10 +222,11 @@ export async function updateMemory(
   content: string,
   opts: UpdateOptions,
 ): Promise<GuildMemory> {
+  const maxBytes = loadConfig().memory.maxBytes
   const { frontmatter, bodyWritten } = await applyAndWrite(
     'memory',
     content,
-    validateMemoryBody,
+    (body) => validateMemoryBody(body, maxBytes),
     opts.reason,
   )
   return {
@@ -271,13 +245,13 @@ export type RenderedGuildSystemMessage = {
 }
 
 function renderContent(promptBody: string, memoryBody: string): string {
-  // R2.3: prompt body, exactly two newlines, `## Long-term memory`, exactly
-  // two newlines, memory body. Trim both ends of each section so the join
-  // never produces three+ newlines from a section that already had trailing
-  // (or leading) whitespace.
+  // Concatenate prompt and memory with exactly two newlines between, trimming
+  // both ends of each section so the join never produces 3+ newlines. No
+  // bundled section heading — any structure the model should see comes from
+  // the operator's own prompt.md / memory.md content.
   const prompt = promptBody.replace(/^\s+|\s+$/g, '')
   const memory = memoryBody.replace(/^\s+|\s+$/g, '')
-  return `${prompt}\n\n${RENDER_HEADING}\n\n${memory}\n`
+  return `${prompt}\n\n${memory}\n`
 }
 
 export async function renderGuildSystemMessage(): Promise<RenderedGuildSystemMessage> {

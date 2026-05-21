@@ -12,7 +12,6 @@ import { z } from 'zod'
 import { paths } from './paths'
 import { parseFrontmatter } from './frontmatter'
 import {
-  CANONICAL_MEMORY_HEADINGS,
   loadMemory,
   loadPrompt,
   unifiedDiff,
@@ -162,14 +161,12 @@ export async function forgetMemory(
   },
 ): Promise<ForgetResult> {
   const before = await loadMemory()
-  const headingList = CANONICAL_MEMORY_HEADINGS.join(', ')
   const llmPrompt = [
-    'You are editing a guild bot\'s long-term memory file. The pattern below describes content the operator wants forgotten.',
+    `The operator wants to forget the following from this guild's long-term memory:`,
     `Pattern: ${pattern}`,
     '',
     'Return the FULL rewritten memory body (no frontmatter) with anything matching the pattern removed.',
-    `Preserve the canonical top-level headings exactly: ${headingList}.`,
-    'Do not add new headings. Do not invent content. Only remove matching bullets/lines.',
+    'Only remove matching content. Do not invent new content. Preserve the existing structure of the file.',
     '',
     'Current memory body:',
     '```',
@@ -179,7 +176,7 @@ export async function forgetMemory(
 
   const result = await opts.runStructured(llmPrompt)
 
-  // applyEdits validator (R1.6 + secret-pattern denylist) runs inside updateMemory.
+  // updateMemory runs its own validator (non-empty + byte cap + secret denylist).
   const after = await updateMemory(result.rewrittenMemory, {
     reason: `forget:${pattern}`,
   })

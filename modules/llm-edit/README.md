@@ -25,7 +25,10 @@ Whole-file mode for callers that already have a finished body:
 
 ```ts
 await applyEdits(prev, { kind: 'whole-file', content: '...new body...' }, {
-  validate: (s) => { if (!s.includes('# People')) throw new Error('missing required heading') },
+  validate: (s) => {
+    if (!s.trim()) throw new Error('body must not be empty')
+    if (Buffer.byteLength(s, 'utf8') > 32_000) throw new Error('body exceeds byte cap')
+  },
 })
 ```
 
