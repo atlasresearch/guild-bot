@@ -27,7 +27,7 @@ export async function appendMessage(
     }
     // Append to JSONL by writing the new full file via atomicWrite. Append-only
     // semantics are preserved at the line level — existing lines are byte-for-byte
-    // identical. R1.4.
+    // identical.
     const allLines = [...existing.map((m) => JSON.stringify(m)), JSON.stringify(fullMessage)]
     await atomicWrite(threadMessagesFile(id), allLines.join('\n') + '\n')
 

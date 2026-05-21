@@ -7,7 +7,7 @@ import { verbose } from '@guildbot/interfaces'
 const MAX_ITERATIONS = 5
 
 // Structural shape for messages the loop emits to onMessage(). Matches the
-// fields a thread store needs without importing @guildbot/threads (R3.3).
+// fields a thread store needs without importing @guildbot/threads.
 export type AgentMessageInput = {
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
@@ -22,7 +22,7 @@ export type AgentLoopOptions = {
   userMessage: string
   /**
    * Prior conversation history. ThreadMessage[] is structurally compatible —
-   * its extra fields (id/seq/ts/kind/sourceRef) are ignored by the loop. R3.1.
+   * its extra fields (id/seq/ts/kind/sourceRef) are ignored by the loop.
    */
   conversationHistory: LlmMessage[]
   context: ToolContext
@@ -35,9 +35,9 @@ export type AgentLoopOptions = {
    * Called for every message the loop produces during execution (assistant
    * turns, including ones containing tool_calls, and tool result messages).
    * The userMessage is NOT replayed through onMessage — the dispatcher
-   * persists the user turn before invoking the loop. R3.2.
+   * persists the user turn before invoking the loop.
    *
-   * If onMessage throws, the loop aborts and propagates the error. R3.4.
+   * If onMessage throws, the loop aborts and propagates the error.
    */
   onMessage?: OnAgentMessage
 }
@@ -75,7 +75,7 @@ export async function agentLoop(options: AgentLoopOptions): Promise<string> {
   const emit = onProgress ?? (() => {})
   const notify: OnAgentMessage = onMessage ?? (async () => {})
 
-  // R3.1: read from disk at the top of every invocation
+  // read from disk at the top of every invocation
   const tools = (await discoverToolDefinitions(toolsDir)) as LlmTool[]
   const skillDescriptions = await discoverSkillDescriptions(skillsDir)
   const systemPrompt = buildSystemPrompt(skillDescriptions)
@@ -119,8 +119,8 @@ export async function agentLoop(options: AgentLoopOptions): Promise<string> {
         toolCalls: response.toolCalls,
       }
       messages.push(assistantMessage)
-      // R3.2: notify onMessage for the assistant turn (which carries the tool calls).
-      // R3.4: errors propagate, aborting the loop.
+      // notify onMessage for the assistant turn (which carries the tool calls).
+      // errors propagate, aborting the loop.
       await notify({
         role: 'assistant',
         content: response.content,
@@ -142,7 +142,7 @@ export async function agentLoop(options: AgentLoopOptions): Promise<string> {
           const handler = await loadToolHandler(name, toolsDir)
           result = await handler(args, context)
         } catch (err) {
-          // R3.9: append error as tool message and continue
+          // append error as tool message and continue
           result = {
             success: false,
             data: { error: err instanceof Error ? err.message : String(err) },
@@ -156,7 +156,7 @@ export async function agentLoop(options: AgentLoopOptions): Promise<string> {
           toolName: toolCall.name,
         }
         messages.push(toolMessage)
-        // R3.2: notify onMessage for the tool result message.
+        // notify onMessage for the tool result message.
         await notify({
           role: 'tool',
           content: toolMessage.content,
@@ -167,13 +167,13 @@ export async function agentLoop(options: AgentLoopOptions): Promise<string> {
       continue
     }
 
-    // R3.10: no tool_calls — return final answer
+    // no tool_calls — return final answer
     verbose(`llm:response [iter=${i}] final`, response.content.slice(0, 200))
-    // R3.2: notify onMessage for the final assistant turn (no tool calls).
+    // notify onMessage for the final assistant turn (no tool calls).
     await notify({ role: 'assistant', content: response.content })
     return response.content
   }
 
-  // R3.8: max iterations reached — return last model content
+  // max iterations reached — return last model content
   return messages[messages.length - 1]?.content ?? ''
 }

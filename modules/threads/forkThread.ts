@@ -21,7 +21,7 @@ export async function forkThread(
   afterMessageId: string,
   opts: ForkOptions = {},
 ): Promise<ThreadMeta> {
-  const sourceMeta = await loadThread(sourceId) // throws ThreadNotFoundError per R1.7
+  const sourceMeta = await loadThread(sourceId) // throws ThreadNotFoundError
   const sourceMessages = await readMessages(sourceId)
   const fork = sourceMessages.find((m) => m.id === afterMessageId)
   if (!fork) {

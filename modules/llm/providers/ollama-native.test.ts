@@ -44,7 +44,7 @@ describe('ollama-native provider', () => {
     expect(out.usage).toEqual({ inputTokens: 1, outputTokens: 2 })
   })
 
-  it('R2.2: passes think=true when thinking is requested', async () => {
+  it('passes think=true when thinking is requested', async () => {
     mockChat.mockResolvedValue({ message: { role: 'assistant', content: '' } })
     await chat(
       { model: 'qwen3.6', messages: [{ role: 'user', content: 'x' }], thinking: true },

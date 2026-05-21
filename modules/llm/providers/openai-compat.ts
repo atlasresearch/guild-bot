@@ -19,7 +19,7 @@ export type OpenAICompatOptions = {
   dialect?: DialectName
 }
 
-// SDK client cache keyed by (baseUrl, apiKey). Per R1.4, the module re-reads
+// SDK client cache keyed by (baseUrl, apiKey). Per, the module re-reads
 // config every call; SDK clients may be reused when inputs match.
 let cachedClient: { key: string; instance: OpenAI } | null = null
 

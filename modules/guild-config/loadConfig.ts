@@ -51,7 +51,7 @@ function readSecretsFile(secretsPath: string): SecretsFile {
     throw e
   }
 
-  // R4.4: refuse if group/world readable or writable
+  // refuse if group/world readable or writable
   if ((stat.mode & FORBIDDEN_PERMS_MASK) !== 0) {
     const octal = (stat.mode & 0o777).toString(8)
     throw new ConfigError(
@@ -73,7 +73,7 @@ function readSecretsFile(secretsPath: string): SecretsFile {
     throw new ConfigError(`Failed to parse ${secretsPath}: ${(e as Error).message}`)
   }
 
-  // R4.3: flat object only
+  // flat object only
   const result = secretsFileSchema.safeParse(parsed)
   if (!result.success) {
     throw new ConfigError(
@@ -93,7 +93,7 @@ function readSecretsFile(secretsPath: string): SecretsFile {
 
 /**
  * Walk an arbitrary object and reject reserved $env: / $file: prefixes
- * before they reach the schema validator. R4.6.
+ * before they reach the schema validator.
  */
 function rejectReservedPrefixes(node: unknown, pathStack: string[] = []): void {
   if (Array.isArray(node)) {
@@ -115,7 +115,7 @@ function rejectReservedPrefixes(node: unknown, pathStack: string[] = []): void {
 /**
  * Walk the validated raw config and replace every {$secret: "key"} with the
  * matching value from secrets.json. Throws ConfigError if any referenced key
- * is missing. R4.5.
+ * is missing.
  */
 function resolveSecrets<T>(node: T, secrets: SecretsFile, pathStack: string[] = []): T {
   if (Array.isArray(node)) {
@@ -141,7 +141,7 @@ function resolveSecrets<T>(node: T, secrets: SecretsFile, pathStack: string[] = 
 }
 
 /**
- * Deep-freeze an object so callers cannot mutate the returned config. R2.5.
+ * Deep-freeze an object so callers cannot mutate the returned config.
  */
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -173,7 +173,7 @@ function getByPath(obj: unknown, dottedPath: string): unknown {
 
 /**
  * Detect inline strings in secret-only fields before the schema runs so the
- * user gets a targeted "secrets must be in secrets.json" error. R4.2.
+ * user gets a targeted "secrets must be in secrets.json" error.
  */
 function rejectInlineSecrets(rawObj: unknown): void {
   for (const path of SECRET_FIELD_PATHS) {
@@ -192,7 +192,7 @@ function rejectInlineSecrets(rawObj: unknown): void {
  * and returns a frozen GuildConfig.
  *
  * MUST be called every time a value is needed — there is no module-level
- * cache. R2.4.
+ * cache.
  */
 export function loadConfig(guildDir?: string): GuildConfig {
   const root = guildDir ?? resolveGuildDir()
@@ -200,11 +200,11 @@ export function loadConfig(guildDir?: string): GuildConfig {
 
   const rawObj = readConfigFile(p.config)
 
-  // R4.6: reject reserved prefixes before schema validation so the user gets
+  // reject reserved prefixes before schema validation so the user gets
   // a targeted message rather than a generic schema failure.
   rejectReservedPrefixes(rawObj)
 
-  // R4.2: reject inline strings in fields that MUST be $secret references
+  // reject inline strings in fields that MUST be $secret references
   // (checked before schema so the error message names the policy clearly).
   rejectInlineSecrets(rawObj)
 

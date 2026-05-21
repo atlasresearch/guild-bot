@@ -29,18 +29,18 @@ describe('@guildbot/discord-index', () => {
     rmSync(join(TEST_GUILD_DIR, 'threads'), { recursive: true, force: true })
   })
 
-  it('R6.8: bind + resolve round-trip for kind=thread', async () => {
+  it('bind + resolve round-trip for kind=thread', async () => {
     await bindDiscord({ kind: 'thread', key: 'discord-channel-1', threadId: 'THREAD_A' })
     const id = await resolveDiscord({ kind: 'thread', key: 'discord-channel-1' })
     expect(id).toBe('THREAD_A')
   })
 
-  it('R6.8: bind + resolve round-trip for kind=reply', async () => {
+  it('bind + resolve round-trip for kind=reply', async () => {
     await bindDiscord({ kind: 'reply', key: 'discord-msg-1', threadId: 'THREAD_B' })
     expect(await resolveDiscord({ kind: 'reply', key: 'discord-msg-1' })).toBe('THREAD_B')
   })
 
-  it('R6.8: resolve missing returns undefined (does not throw)', async () => {
+  it('resolve missing returns undefined (does not throw)', async () => {
     const id = await resolveDiscord({ kind: 'thread', key: 'nope' })
     expect(id).toBeUndefined()
   })
@@ -51,7 +51,7 @@ describe('@guildbot/discord-index', () => {
     expect(await resolveDiscord({ kind: 'thread', key: 'k' })).toBeUndefined()
   })
 
-  it('R2.7: unbind removes only the index file; underlying thread dir is untouched', async () => {
+  it('unbind removes only the index file; underlying thread dir is untouched', async () => {
     const fs = require('node:fs') as typeof import('node:fs')
     const path = require('node:path') as typeof import('node:path')
     // Simulate a thread dir living alongside the index.

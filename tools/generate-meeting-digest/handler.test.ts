@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
-// R7.7: only mock @guildbot/llm (external boundary). Handler code runs for real.
+// only mock @guildbot/llm (external boundary). Handler code runs for real.
 const { mockStructured } = vi.hoisted(() => ({ mockStructured: vi.fn() }))
 vi.mock('@guildbot/llm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@guildbot/llm')>()

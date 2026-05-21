@@ -1,6 +1,6 @@
 // Public API for @guildbot/llm.
 //
-// Reads config.llm.* on every call via @guildbot/guild-config — no caching (R1.4).
+// Reads config.llm.* on every call via @guildbot/guild-config — no caching.
 // SDK clients are reused across calls when their inputs match.
 
 import { z } from 'zod'

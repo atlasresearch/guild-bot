@@ -1,4 +1,4 @@
-// Per-thread in-process async mutex. R1.8.
+// Per-thread in-process async mutex.
 //
 // Each thread ID maps to a tail-promise; new work chains onto it so writes for
 // the same thread run strictly sequentially. Reads are not serialised.

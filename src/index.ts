@@ -923,7 +923,7 @@ async function handleInteractionInner(interaction: Interaction) {
 }
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
-  // Re-read config per event so an operator edit takes effect immediately (R2.4)
+  // Re-read config per event so an operator edit takes effect immediately
   const alwaysRecordingChannelId = loadConfig().discord.alwaysRecordingChannelId
   if (!alwaysRecordingChannelId) return
 
@@ -1023,7 +1023,7 @@ export async function handleMessage(message: Message) {
 }
 
 /**
- * Resolve an incoming Discord message to a guild-bot thread (R2.2):
+ * Resolve an incoming Discord message to a guild-bot thread:
  *   1. If we are in a Discord thread channel bound to a guild-bot thread → that thread.
  *   2. Else if the message is a direct reply (message.reference.messageId) to a bound
  *      bot reply → that thread.
@@ -1061,10 +1061,10 @@ async function handleMessageInner(message: Message) {
   const botId = client.user?.id
   const isMention = botId ? message.mentions.has(botId) : false
 
-  // R2.2: resolve thread (Discord thread channel → reply binding).
+  // resolve thread (Discord thread channel → reply binding).
   let threadId = await resolveExistingThread(message)
 
-  // R2.3: respond if a thread resolved OR the bot was mentioned; else bail.
+  // respond if a thread resolved OR the bot was mentioned; else bail.
   if (!threadId && !isMention) return
 
   try {
@@ -1181,12 +1181,12 @@ async function handleMessageInner(message: Message) {
     if (question) contextParts.push(`User Question:\n${question}`)
     const fullContext = contextParts.join('\n\n')
 
-    // R3.6: load prior history BEFORE appending the current user message, so
+    // load prior history BEFORE appending the current user message, so
     // the agent loop sees prior turns and the loop itself adds the current
     // userMessage to its prompt (avoiding duplication).
     const history: ThreadMessage[] = await readMessages(threadId)
 
-    // R2.6: persist the user turn with sourceRef tying it to Discord.
+    // persist the user turn with sourceRef tying it to Discord.
     await appendMessage(threadId, {
       role: 'user',
       content: question,
@@ -1198,7 +1198,7 @@ async function handleMessageInner(message: Message) {
       },
     })
 
-    // R3.5: wire onMessage to appendMessage. Errors propagate (R3.4).
+    // wire onMessage to appendMessage. Errors propagate.
     const answer = await agentLoop({
       userMessage: fullContext,
       conversationHistory: history,
@@ -1240,7 +1240,7 @@ async function handleMessageInner(message: Message) {
       await reply.edit({ content: answer })
     }
 
-    // R2.5: bind the assistant reply ID so replies to it resolve back to this thread.
+    // bind the assistant reply ID so replies to it resolve back to this thread.
     try {
       await bindDiscord({ kind: 'reply', key: reply.id, threadId })
     } catch (e) {

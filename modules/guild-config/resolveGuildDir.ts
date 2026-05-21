@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 /**
- * Resolve the active guild directory (R3.1, R3.2, R3.3).
+ * Resolve the active guild directory.
  *
  * Precedence:
  *   1. `--guild-dir <path>` CLI argument (parsed from process.argv)
@@ -46,7 +46,7 @@ export class GuildDirNotFoundError extends Error {
 }
 
 /**
- * Resolve and validate that the guild dir exists. Throws GuildDirNotFoundError otherwise (R3.4).
+ * Resolve and validate that the guild dir exists. Throws GuildDirNotFoundError otherwise.
  */
 export function resolveGuildDirOrThrow(argv: string[] = process.argv): string {
   const dir = resolveGuildDir(argv)

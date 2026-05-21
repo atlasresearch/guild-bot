@@ -1,6 +1,6 @@
 // Read config.llm.* via @guildbot/guild-config, return the active provider's
 // dispatch info. Called at the top of every chat()/embed()/structured() call
-// — no caching (R1.4).
+// — no caching.
 
 import { loadConfig, type LlmDialect, type LlmProvider } from '@guildbot/guild-config'
 import type { DialectName } from './dialects'

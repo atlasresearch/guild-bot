@@ -52,7 +52,7 @@ describe('guildbot thread CLI', () => {
     await fsp.rm(`${TEST_GUILD_DIR}/threads`, { recursive: true, force: true })
   })
 
-  it('R5.1: thread new creates a thread and prints its id', async () => {
+  it('thread new creates a thread and prints its id', async () => {
     const cap = captureStdout()
     try {
       await cmdThread(['new', '--guild', 'discord:test', '--title', 'Hello'])
@@ -67,7 +67,7 @@ describe('guildbot thread CLI', () => {
     expect(meta.title).toBe('Hello')
   })
 
-  it('R5.4: thread list reports each existing thread', async () => {
+  it('thread list reports each existing thread', async () => {
     const cap = captureStdout()
     try {
       await cmdThread(['new', '--guild', 'g1'])
@@ -87,7 +87,7 @@ describe('guildbot thread CLI', () => {
     }
   })
 
-  it('R5.4: thread show prints meta + messages', async () => {
+  it('thread show prints meta + messages', async () => {
     const cap = captureStdout()
     try {
       await cmdThread(['new', '--guild', 'g1', '--title', 'show-me'])
@@ -111,7 +111,7 @@ describe('guildbot thread CLI', () => {
     expect(joined).toContain('messages:  2')
   })
 
-  it('R5.3: thread fork creates a new thread parented at --after <messageId>', async () => {
+  it('thread fork creates a new thread parented at --after <messageId>', async () => {
     const cap = captureStdout()
     try {
       await cmdThread(['new', '--guild', 'g1'])

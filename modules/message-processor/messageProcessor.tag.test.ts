@@ -6,7 +6,7 @@ import * as db from '@guildbot/database'
 import type { IDBSchema } from '@guildbot/database'
 import * as processor from './messageProcessor'
 
-// R5.1, R5.2: use a temporary directory per test run
+// use a temporary directory per test run
 describe('Message Processor Tagging', () => {
   const testRecord: IDBSchema = {
     id: 'msg_to_tag',

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 // A $secret reference in config.json. Inline strings are rejected for any field
-// declared with `secretRef()` — secrets MUST live in secrets.json (R4.1, R4.2).
+// declared with `secretRef()` — secrets MUST live in secrets.json.
 const secretRefSchema = z
   .object({
     $secret: z.string().min(1, '$secret reference must name a non-empty key'),
@@ -20,7 +20,7 @@ export type SecretRef = z.infer<typeof secretRefSchema>
 export const isSecretRef = (v: unknown): v is SecretRef =>
   typeof v === 'object' && v !== null && '$secret' in v && typeof (v as SecretRef).$secret === 'string'
 
-// Reject reserved prefixes ($env, $file) until they are supported (R4.6).
+// Reject reserved prefixes ($env, $file) until they are supported.
 const reservedRefSchema = z
   .object({
     $env: z.string().optional(),
@@ -86,7 +86,7 @@ export const llmEmbedOverridesSchema = z
 export const llmBlockSchema = z
   .object({
     provider: llmProviderSchema.default('ollama'),
-    // Per plan 004 R4.3: dialect is required only when provider="openai-compat".
+    // dialect is required only when provider="openai-compat".
     // When omitted there, the module defaults to "generic" with a startup warning.
     dialect: llmDialectSchema.nullable().optional(),
     baseUrl: z.string().nullable().optional(),

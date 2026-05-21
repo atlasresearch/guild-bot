@@ -48,7 +48,7 @@ describe('openai-compat provider', () => {
     expect(out.dialect).toBe('ollama-v1')
   })
 
-  it('R3.4: vllm dialect forwards extra_body.chat_template_kwargs when thinking=false', async () => {
+  it('vllm dialect forwards extra_body.chat_template_kwargs when thinking=false', async () => {
     mockCreate.mockResolvedValue(baseRaw())
     await chat(
       { model: 'qwen3.6', messages: [{ role: 'user', content: 'x' }], thinking: false },
@@ -58,7 +58,7 @@ describe('openai-compat provider', () => {
     expect(args.extra_body).toEqual({ chat_template_kwargs: { enable_thinking: false } })
   })
 
-  it('R3.7: thinking=true against ollama-v1 throws UnsupportedCapabilityError', async () => {
+  it('thinking=true against ollama-v1 throws UnsupportedCapabilityError', async () => {
     await expect(
       chat(
         { model: 'qwen3.6', messages: [{ role: 'user', content: 'x' }], thinking: true },
@@ -68,7 +68,7 @@ describe('openai-compat provider', () => {
     expect(mockCreate).not.toHaveBeenCalled()
   })
 
-  it('R2.4: thinking=false against ollama-v1 is a no-op (no throw)', async () => {
+  it('thinking=false against ollama-v1 is a no-op (no throw)', async () => {
     mockCreate.mockResolvedValue(baseRaw())
     await expect(
       chat(
@@ -78,7 +78,7 @@ describe('openai-compat provider', () => {
     ).resolves.toBeTruthy()
   })
 
-  it('R3.6: llama-server defaults parallel_tool_calls to false; vllm to true', async () => {
+  it('llama-server defaults parallel_tool_calls to false; vllm to true', async () => {
     mockCreate.mockResolvedValue(baseRaw())
     const tools = [
       { type: 'function' as const, function: { name: 'x', description: '', parameters: {} } },
@@ -97,7 +97,7 @@ describe('openai-compat provider', () => {
     expect((mockCreate.mock.calls[0][0] as { parallel_tool_calls?: boolean }).parallel_tool_calls).toBe(true)
   })
 
-  it('R3.6: explicit parallelToolCalls=true overrides the llama-server default', async () => {
+  it('explicit parallelToolCalls=true overrides the llama-server default', async () => {
     mockCreate.mockResolvedValue(baseRaw())
     const tools = [
       { type: 'function' as const, function: { name: 'x', description: '', parameters: {} } },
@@ -114,7 +114,7 @@ describe('openai-compat provider', () => {
     expect((mockCreate.mock.calls[0][0] as { parallel_tool_calls?: boolean }).parallel_tool_calls).toBe(true)
   })
 
-  it('R3.8: user-supplied extraBody overrides dialect-supplied entries', async () => {
+  it('user-supplied extraBody overrides dialect-supplied entries', async () => {
     mockCreate.mockResolvedValue(baseRaw())
     await chat(
       {

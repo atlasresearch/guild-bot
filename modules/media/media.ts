@@ -184,7 +184,7 @@ const notify = async (
  *
  * @param audioURL  - HTTP(S) URL, YouTube URL, or file:// URL
  * @param onProgress - optional progress callback
- * @param mediaDir  - injectable directory for tests (R5.3); defaults to MEDIA_DIR
+ * @param mediaDir  - injectable directory for tests; defaults to MEDIA_DIR
  */
 export async function audioToTranscript(
   audioURL: string,
@@ -443,7 +443,7 @@ export async function audioToTranscript(
  * @param onProgress - optional progress callback
  * @param force      - force regeneration even if artifacts exist
  * @param cldGenerator - injectable CLD extraction function
- * @param mediaDir   - injectable directory for tests (R5.3); defaults to MEDIA_DIR
+ * @param mediaDir   - injectable directory for tests; defaults to MEDIA_DIR
  */
 export async function transcriptToDiagrams(
   id?: string | undefined,

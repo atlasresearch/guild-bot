@@ -1,6 +1,6 @@
 // Provider-neutral message and tool types used across all providers and dialects.
 // Outer-wrapper Tool shape matches what tools/<name>/definition.json files
-// already store, so the agent loop can forward them unchanged (R5.2).
+// already store, so the agent loop can forward them unchanged.
 
 export type LlmRole = 'system' | 'user' | 'assistant' | 'tool'
 
@@ -83,7 +83,7 @@ export class UnsupportedCapabilityError extends Error {
 /**
  * Check that a request's opt-IN capability requirements are met by the active
  * provider/dialect. Opt-outs (thinking=false, parallelToolCalls=false,
- * responseFormat='text') are universally honourable and MUST NOT throw. R2.4.
+ * responseFormat='text') are universally honourable and MUST NOT throw.
  */
 export function assertCapabilities(
   req: LlmChatRequest,

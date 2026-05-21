@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { discoverSkillDescriptions, loadSkillBody } from './discover'
 
 // Tests exercise real discovery functions against fixture directories on disk.
-// No mocking of internal modules (R7.9).
+// No mocking of internal modules.
 
 describe('discoverSkillDescriptions', () => {
   let tempDir: string

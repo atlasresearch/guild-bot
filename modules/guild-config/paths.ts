@@ -22,7 +22,7 @@ export type GuildPaths = {
 
 /**
  * All path constants formerly exposed by `@guildbot/config`, rooted at the
- * active guild dir (or an explicit override). R5.3.
+ * active guild dir (or an explicit override).
  */
 export function paths(guildDir?: string): GuildPaths {
   const root = guildDir ?? resolveGuildDir()

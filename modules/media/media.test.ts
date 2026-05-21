@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { audioToTranscript } from './media'
 
-// R5.1, R5.2: tests use a temporary media directory, never ~/.guildbot-* (R5.3)
+// tests use a temporary media directory, never ~/.guildbot-*
 describe('audioToTranscript', () => {
   let testMediaDir: string
 

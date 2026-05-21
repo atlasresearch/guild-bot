@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { discoverToolDefinitions, loadToolHandler } from './discover'
 
 // Tests exercise real discovery functions against fixture directories on disk.
-// No mocking of internal modules (R7.9).
+// No mocking of internal modules.
 
 describe('discoverToolDefinitions', () => {
   let tempDir: string

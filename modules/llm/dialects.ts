@@ -1,6 +1,6 @@
 // Per-dialect adapters within the openai-compat provider. Five small objects
 // in a registry — keeps differences testable in isolation without 10 separate
-// files (R3.1).
+// files.
 //
 // Each dialect:
 //   - declares its LlmCapabilities + parallelToolCallsDefault
@@ -130,7 +130,7 @@ const vllm: Dialect = {
   },
   shapeRequest: (req) => {
     const extra: Record<string, unknown> = {}
-    // R3.7: thinking: false → chat_template_kwargs.enable_thinking: false
+    // thinking: false → chat_template_kwargs.enable_thinking: false
     if (req.thinking === false) {
       extra.chat_template_kwargs = { enable_thinking: false }
     }
@@ -141,7 +141,7 @@ const vllm: Dialect = {
 
 const llamaServer: Dialect = {
   name: 'llama-server',
-  parallelToolCallsDefault: false, // R3.6: off by default; opt-in via parallel_tool_calls
+  parallelToolCallsDefault: false, // off by default; opt-in via parallel_tool_calls
   capabilities: {
     toolCalling: true,
     thinking: true,

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import * as db from './db'
 import { IDBSchema } from './schema'
 
-// R5.1, R5.2: tests use a temporary directory, never ~/.guildbot-*
+// tests use a temporary directory, never ~/.guildbot-*
 describe('Database', () => {
   const testRecord: IDBSchema = {
     id: 'msg_1',

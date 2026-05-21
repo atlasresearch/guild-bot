@@ -41,14 +41,14 @@ describe('@guildbot/threads', () => {
   })
 
   describe('R1: storage', () => {
-    it('R1.1, R1.2: createThread creates a ULID-named directory with meta.json + messages.jsonl', async () => {
+    it('createThread creates a ULID-named directory with meta.json + messages.jsonl', async () => {
       const meta = await createThread({ guildId: 'discord:g1' })
       expect(meta.id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/) // ULID Crockford-base32
       expect(existsSync(join(TEST_GUILD_DIR, 'threads', meta.id, 'meta.json'))).toBe(true)
       expect(existsSync(join(TEST_GUILD_DIR, 'threads', meta.id, 'messages.jsonl'))).toBe(true)
     })
 
-    it('R1.2: listThreads yields chronological order by ULID', async () => {
+    it('listThreads yields chronological order by ULID', async () => {
       const a = await createThread({ guildId: 'g' })
       await new Promise((r) => setTimeout(r, 2))
       const b = await createThread({ guildId: 'g' })
@@ -56,13 +56,13 @@ describe('@guildbot/threads', () => {
       expect(list.map((m) => m.id)).toEqual([a.id, b.id])
     })
 
-    it('R1.5: guildId is set at creation and persisted', async () => {
+    it('guildId is set at creation and persisted', async () => {
       const meta = await createThread({ guildId: 'discord:abc' })
       const reloaded = await loadThread(meta.id)
       expect(reloaded.guildId).toBe('discord:abc')
     })
 
-    it('R1.6: appendMessage assigns monotonically increasing seq and stable ids', async () => {
+    it('appendMessage assigns monotonically increasing seq and stable ids', async () => {
       const meta = await createThread({ guildId: 'g' })
       const a = await appendMessage(meta.id, { role: 'user', content: 'hi' })
       const b = await appendMessage(meta.id, { role: 'assistant', content: 'hey' })
@@ -72,17 +72,17 @@ describe('@guildbot/threads', () => {
       expect(c.id).toBe(`${meta.id}-msg-3`)
     })
 
-    it('R1.7: loadThread throws ThreadNotFoundError on a missing thread', async () => {
+    it('loadThread throws ThreadNotFoundError on a missing thread', async () => {
       await expect(loadThread('does-not-exist')).rejects.toBeInstanceOf(ThreadNotFoundError)
     })
 
-    it('R1.7: forkThread throws ThreadNotFoundError on a missing source', async () => {
+    it('forkThread throws ThreadNotFoundError on a missing source', async () => {
       await expect(forkThread('missing-src', 'whatever')).rejects.toBeInstanceOf(
         ThreadNotFoundError,
       )
     })
 
-    it('R6.1 / R1.8: concurrent appends produce distinct sequential seq values with no loss', async () => {
+    it('concurrent appends produce distinct sequential seq values with no loss', async () => {
       const meta = await createThread({ guildId: 'g' })
       const N = 20
       const promises = Array.from({ length: N }, (_, i) =>
@@ -95,7 +95,7 @@ describe('@guildbot/threads', () => {
       expect(onDisk.map((m) => m.seq)).toEqual(seqs)
     })
 
-    it('R1.10: title is derived from the first user message (≤80 chars)', async () => {
+    it('title is derived from the first user message (≤80 chars)', async () => {
       const meta = await createThread({ guildId: 'g' })
       await appendMessage(meta.id, {
         role: 'user',
@@ -106,12 +106,12 @@ describe('@guildbot/threads', () => {
       expect(reloaded.title?.startsWith('A really long first question')).toBe(true)
     })
 
-    it('R1.10: title falls back to "Thread <date>" when no user message available', async () => {
+    it('title falls back to "Thread <date>" when no user message available', async () => {
       const meta = await createThread({ guildId: 'g' })
       expect(meta.title).toMatch(/^Thread \d{4}-\d{2}-\d{2}$/)
     })
 
-    it('R1.4: existing JSONL lines are preserved byte-for-byte across appends', async () => {
+    it('existing JSONL lines are preserved byte-for-byte across appends', async () => {
       const meta = await createThread({ guildId: 'g' })
       await appendMessage(meta.id, { role: 'user', content: 'one' })
       const firstLine = require('node:fs')
@@ -126,7 +126,7 @@ describe('@guildbot/threads', () => {
   })
 
   describe('R4: forking', () => {
-    it('R4.1, R4.2: forkThread creates a new thread parented at the fork point with messages up to cutoff', async () => {
+    it('forkThread creates a new thread parented at the fork point with messages up to cutoff', async () => {
       const src = await createThread({ guildId: 'g' })
       const a = await appendMessage(src.id, { role: 'user', content: 'q1' })
       const b = await appendMessage(src.id, { role: 'assistant', content: 'a1' })
@@ -142,7 +142,7 @@ describe('@guildbot/threads', () => {
       expect(forkMsgs[0].id).toBe(`${fork.id}-msg-1`)
     })
 
-    it('R4.3: forking copies referenced attachments to the new thread', async () => {
+    it('forking copies referenced attachments to the new thread', async () => {
       const src = await createThread({ guildId: 'g' })
       const a = await appendMessage(src.id, { role: 'user', content: 'with file' })
       const fs = require('node:fs') as typeof import('node:fs')
@@ -155,7 +155,7 @@ describe('@guildbot/threads', () => {
       expect(existsSync(join(newAttDir, 'note.txt'))).toBe(true)
     })
 
-    it('R4.4: forking does NOT copy Discord index entries', async () => {
+    it('forking does NOT copy Discord index entries', async () => {
       const src = await createThread({ guildId: 'g' })
       const a = await appendMessage(src.id, { role: 'user', content: 'q' })
       const fs = require('node:fs') as typeof import('node:fs')
@@ -200,7 +200,7 @@ describe('@guildbot/threads', () => {
     })
   })
 
-  describe('R1.9: platform independence', () => {
+  describe('platform independence', () => {
     it('does not import discord.js', async () => {
       const fs = require('node:fs') as typeof import('node:fs')
       const path = require('node:path') as typeof import('node:path')

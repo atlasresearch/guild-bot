@@ -33,18 +33,18 @@ describe('resolveGuildDir', () => {
     Object.assign(process.env, originalEnv)
   })
 
-  // R3.1, R3.2: precedence
-  it('R3.1: --guild-dir wins over GUILDBOT_GUILD_DIR', () => {
+  // precedence
+  it('--guild-dir wins over GUILDBOT_GUILD_DIR', () => {
     process.env.GUILDBOT_GUILD_DIR = '/from-env'
     expect(resolveGuildDir(['--guild-dir', '/from-cli'])).toBe(resolve('/from-cli'))
   })
 
-  it('R3.1: default is ~/.guildbot/default/', () => {
+  it('default is ~/.guildbot/default/', () => {
     expect(resolveGuildDir([])).toBe(resolve(join(homedir(), '.guildbot', 'default')))
   })
 
-  // R3.3: canonicalisation
-  it('R3.3: returns an absolute, canonical path', () => {
+  // canonicalisation
+  it('returns an absolute, canonical path', () => {
     process.env.GUILDBOT_GUILD_DIR = './relative'
     const r = resolveGuildDir([])
     expect(r.startsWith('/')).toBe(true)
@@ -66,12 +66,12 @@ describe('resolveGuildDirOrThrow', () => {
     Object.assign(process.env, originalEnv)
   })
 
-  it('R3.4: returns the dir when it exists', () => {
+  it('returns the dir when it exists', () => {
     process.env.GUILDBOT_GUILD_DIR = realDir
     expect(resolveGuildDirOrThrow([])).toBe(resolve(realDir))
   })
 
-  it('R3.4: throws GuildDirNotFoundError with a guildbot init hint when missing', () => {
+  it('throws GuildDirNotFoundError with a guildbot init hint when missing', () => {
     process.env.GUILDBOT_GUILD_DIR = '/nonexistent/guild-dir-xyz'
     expect(() => resolveGuildDirOrThrow([])).toThrow(GuildDirNotFoundError)
     try {

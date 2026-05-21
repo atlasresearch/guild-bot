@@ -25,14 +25,14 @@ describe('initGuildDir', () => {
     rmSync(codebaseRoot, { recursive: true, force: true })
   })
 
-  it('R1.3: creates all data subdirs', () => {
+  it('creates all data subdirs', () => {
     initGuildDir(guildDir, { codebaseRoot })
     for (const sub of ['db', 'recordings', 'sessions', 'sessions/context', 'media', 'exports', 'threads', 'memory-history', 'snapshots']) {
       expect(existsSync(join(guildDir, sub)), `missing ${sub}`).toBe(true)
     }
   })
 
-  it('R5.4: writes a default config.json on first run', () => {
+  it('writes a default config.json on first run', () => {
     initGuildDir(guildDir, { codebaseRoot })
     expect(existsSync(join(guildDir, 'config.json'))).toBe(true)
     const cfg = JSON.parse(readFileSync(join(guildDir, 'config.json'), 'utf8'))
@@ -40,7 +40,7 @@ describe('initGuildDir', () => {
     expect(cfg.discord.token).toEqual({ $secret: 'discord.token' })
   })
 
-  it('R5.4: merges config overrides on top of defaults', () => {
+  it('merges config overrides on top of defaults', () => {
     initGuildDir(guildDir, {
       codebaseRoot,
       config: { guild: { id: 'discord:abc', name: 'abc' }, llm: { provider: 'openai-compat' } },
@@ -52,7 +52,7 @@ describe('initGuildDir', () => {
     expect(cfg.llm.models.default).toBe('qwen3.6')
   })
 
-  it('R5.4: does NOT overwrite existing config.json on re-run', () => {
+  it('does NOT overwrite existing config.json on re-run', () => {
     initGuildDir(guildDir, { codebaseRoot })
     const before = readFileSync(join(guildDir, 'config.json'), 'utf8')
     initGuildDir(guildDir, { codebaseRoot })
@@ -60,20 +60,20 @@ describe('initGuildDir', () => {
     expect(after).toBe(before)
   })
 
-  it('R5.5: writes secrets.json with mode 0600', () => {
+  it('writes secrets.json with mode 0600', () => {
     initGuildDir(guildDir, { codebaseRoot, secrets: { 'discord.token': 'abc' } })
     const stat = statSync(join(guildDir, 'secrets.json'))
     expect((stat.mode & 0o777).toString(8)).toBe('600')
     expect(JSON.parse(readFileSync(join(guildDir, 'secrets.json'), 'utf8'))).toEqual({ 'discord.token': 'abc' })
   })
 
-  it('R5.5: creates an empty secrets.json when none supplied (so permission check has a file)', () => {
+  it('creates an empty secrets.json when none supplied (so permission check has a file)', () => {
     initGuildDir(guildDir, { codebaseRoot })
     expect(existsSync(join(guildDir, 'secrets.json'))).toBe(true)
     expect(JSON.parse(readFileSync(join(guildDir, 'secrets.json'), 'utf8'))).toEqual({})
   })
 
-  it('R5.5: merges new secrets into an existing secrets.json', () => {
+  it('merges new secrets into an existing secrets.json', () => {
     initGuildDir(guildDir, { codebaseRoot, secrets: { 'discord.token': 'first' } })
     initGuildDir(guildDir, { codebaseRoot, secrets: { 'llm.apiKey': 'second' } })
     const secrets = JSON.parse(readFileSync(join(guildDir, 'secrets.json'), 'utf8'))

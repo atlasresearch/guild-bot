@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-// Only mock the @guildbot/llm public API; internal modules are exercised for real (R7.7).
+// Only mock the @guildbot/llm public API; internal modules are exercised for real.
 const { mockChat } = vi.hoisted(() => ({ mockChat: vi.fn() }))
 vi.mock('@guildbot/llm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@guildbot/llm')>()
@@ -180,7 +180,7 @@ describe('agentLoop', () => {
     expect(systemMsg.content).toContain('A test skill')
   })
 
-  it('R3.2: should call onMessage for assistant + tool result + final assistant turns', async () => {
+  it('should call onMessage for assistant + tool result + final assistant turns', async () => {
     mockChat.mockResolvedValueOnce(toolCallResponse([{ name: 'echo-tool', arguments: { input: 'hi' } }]))
     mockChat.mockResolvedValueOnce(noToolsResponse('All done'))
 
@@ -211,7 +211,7 @@ describe('agentLoop', () => {
     expect(messages[2].content).toBe('All done')
   })
 
-  it('R3.4: onMessage errors abort the loop and propagate', async () => {
+  it('onMessage errors abort the loop and propagate', async () => {
     mockChat.mockResolvedValueOnce(noToolsResponse('Hello'))
     const onMessage = vi.fn().mockRejectedValue(new Error('disk full'))
 
@@ -228,7 +228,7 @@ describe('agentLoop', () => {
     ).rejects.toThrow('disk full')
   })
 
-  it('R3.1: accepts conversation history containing assistant + tool messages and forwards their core fields to chat()', async () => {
+  it('accepts conversation history containing assistant + tool messages and forwards their core fields to chat()', async () => {
     mockChat.mockResolvedValueOnce(noToolsResponse('OK'))
     await agentLoop({
       userMessage: 'continue',
@@ -282,7 +282,7 @@ describe('agentLoop', () => {
   })
 })
 
-describe('R3.3: agent loop platform independence', () => {
+describe('agent loop platform independence', () => {
   it('does not import @guildbot/threads or @guildbot/discord-index', async () => {
     const fs = require('node:fs') as typeof import('node:fs')
     const path = require('node:path') as typeof import('node:path')

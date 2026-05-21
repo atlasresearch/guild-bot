@@ -1,6 +1,6 @@
 // Integration tests for plan 005 thread continuity in the Discord dispatcher.
 //
-// R6.7: do NOT mock @guildbot/threads or @guildbot/discord-index — use real
+// do NOT mock @guildbot/threads or @guildbot/discord-index — use real
 // modules against a temp GUILD_DIR so the file-on-disk semantics are exercised.
 
 import fsp from 'node:fs/promises'
@@ -120,7 +120,7 @@ describe('dispatcher → @guildbot/threads integration', () => {
     await fsp.rm(`${TEST_GUILD_DIR}/threads`, { recursive: true, force: true })
   })
 
-  it('R2.3 / R2.4: a fresh @mention creates a new guild-bot thread + binds the Discord thread', async () => {
+  it('a fresh @mention creates a new guild-bot thread + binds the Discord thread', async () => {
     const { msg } = buildMessage()
     await handleMessage(msg as any)
 
@@ -132,7 +132,7 @@ describe('dispatcher → @guildbot/threads integration', () => {
     expect(bound).toBe(threads[0].id)
   })
 
-  it('R2.6: the user turn is persisted with sourceRef.platform=discord', async () => {
+  it('the user turn is persisted with sourceRef.platform=discord', async () => {
     const { msg } = buildMessage({ id: 'msg-source-ref' })
     await handleMessage(msg as any)
 
@@ -145,14 +145,14 @@ describe('dispatcher → @guildbot/threads integration', () => {
     expect(userMsg.sourceRef?.channelId).toBe('channel-1')
   })
 
-  it('R2.5: the assistant reply id is bound back to the thread', async () => {
+  it('the assistant reply id is bound back to the thread', async () => {
     const { msg, reply } = buildMessage()
     await handleMessage(msg as any)
     const [t] = await listThreads()
     expect(await resolveDiscord({ kind: 'reply', key: reply.id })).toBe(t.id)
   })
 
-  it('R3.5 / R6.4: a second mention in the same Discord thread continues the conversation', async () => {
+  it('a second mention in the same Discord thread continues the conversation', async () => {
     // First turn — creates the thread.
     const { msg: m1 } = buildMessage({ content: `<@${mockClient.user.id}> first turn` })
     await handleMessage(m1 as any)
@@ -189,7 +189,7 @@ describe('dispatcher → @guildbot/threads integration', () => {
     expect(secondTurnHistory.find((m: any) => m.role === 'user')?.content).toContain('first turn')
   })
 
-  it('R2.2 / R6.5: replying to a bound assistant message resolves to the same thread (no Discord thread channel)', async () => {
+  it('replying to a bound assistant message resolves to the same thread (no Discord thread channel)', async () => {
     // Simulate an existing reply binding without a Discord thread channel.
     const { msg: setupMsg, reply: setupReply } = buildMessage()
     await handleMessage(setupMsg as any)
@@ -216,7 +216,7 @@ describe('dispatcher → @guildbot/threads integration', () => {
     expect(resolvedHistory.find((m: any) => m.role === 'user')).toBeDefined()
   })
 
-  it('R2.3: bails when no mention and no bound thread', async () => {
+  it('bails when no mention and no bound thread', async () => {
     const { msg } = buildMessage()
     msg.mentions.has.mockReturnValue(false)
     await handleMessage(msg as any)
@@ -224,7 +224,7 @@ describe('dispatcher → @guildbot/threads integration', () => {
     expect(msg.reply).not.toHaveBeenCalled()
   })
 
-  it('R2.3: in a bound Discord thread, responds even without a mention', async () => {
+  it('in a bound Discord thread, responds even without a mention', async () => {
     // Pre-bind a thread channel.
     const { msg: setup } = buildMessage()
     await handleMessage(setup as any)
@@ -241,7 +241,7 @@ describe('dispatcher → @guildbot/threads integration', () => {
     expect(followup.msg.reply).toHaveBeenCalledWith('Thinking...')
   })
 
-  it('R3.4 / R6.6: onMessage errors abort the dispatcher gracefully (caller is informed)', async () => {
+  it('onMessage errors abort the dispatcher gracefully (caller is informed)', async () => {
     // Mock agentLoop to call its onMessage callback with one that throws.
     const { msg, reply } = buildMessage()
     vi.mocked(agentLoop).mockImplementationOnce(async (opts: any) => {

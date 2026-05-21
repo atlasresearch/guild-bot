@@ -9,13 +9,13 @@ const baseReq = (overrides: Partial<LlmChatRequest> = {}): LlmChatRequest => ({
 })
 
 describe('DIALECTS registry', () => {
-  it('R3.1: exposes exactly five dialects with the expected names', () => {
+  it('exposes exactly five dialects with the expected names', () => {
     expect(DIALECT_NAMES.sort()).toEqual(
       ['generic', 'llama-server', 'ollama-v1', 'openai', 'vllm'].sort(),
     )
   })
 
-  it('R3.2: each dialect declares capabilities and a parallelToolCallsDefault', () => {
+  it('each dialect declares capabilities and a parallelToolCallsDefault', () => {
     for (const name of DIALECT_NAMES) {
       const d = DIALECTS[name]
       expect(typeof d.parallelToolCallsDefault).toBe('boolean')
@@ -26,7 +26,7 @@ describe('DIALECTS registry', () => {
     }
   })
 
-  it('R3.6: llama-server defaults parallelToolCalls to false; everything else defaults true', () => {
+  it('llama-server defaults parallelToolCalls to false; everything else defaults true', () => {
     expect(DIALECTS['llama-server'].parallelToolCallsDefault).toBe(false)
     for (const name of (['openai', 'ollama-v1', 'vllm', 'generic'] as DialectName[])) {
       expect(DIALECTS[name].parallelToolCallsDefault).toBe(true)
@@ -39,7 +39,7 @@ describe('getDialect', () => {
     expect(getDialect('vllm').name).toBe('vllm')
   })
 
-  it('R3.3: falls back to "generic" when name is undefined or unknown', () => {
+  it('falls back to "generic" when name is undefined or unknown', () => {
     // Suppress console.warn from the fallback warning
     const originalWarn = console.warn
     console.warn = () => {}
@@ -100,7 +100,7 @@ describe('dialect.normaliseResponse', () => {
     expect(out.dialect).toBe('openai')
   })
 
-  it('R3.4/R3.5: vllm + llama-server extract message.reasoning_content into LlmChatResponse.reasoning', () => {
+  it('vllm + llama-server extract message.reasoning_content into LlmChatResponse.reasoning', () => {
     const withReasoning = raw({
       choices: [
         {

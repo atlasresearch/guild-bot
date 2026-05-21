@@ -33,7 +33,7 @@ export async function discoverSkillDescriptions(skillsDir?: string): Promise<Ski
         results.push({ name: fm.name, description: fm.description })
       }
     } catch {
-      // R6.6: silently skip directories that lack a SKILL.md
+      // silently skip directories that lack a SKILL.md
     }
   }
   return results

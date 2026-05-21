@@ -67,8 +67,8 @@ function deepMerge<T extends Record<string, unknown>>(base: T, overlay: Partial<
  * Initialise a new guild dir from defaults.
  *
  * - Creates the dir and data subdirs.
- * - Writes config.json (merging in `opts.config`) only if it does not already exist (R5.4).
- * - Writes secrets.json with mode 0600 (R5.5), merging in `opts.secrets` if provided.
+ * - Writes config.json (merging in `opts.config`) only if it does not already exist.
+ * - Writes secrets.json with mode 0600, merging in `opts.secrets` if provided.
  * - Seeds tools/, skills/, prompt.md, memory.md from the codebase if absent.
  *
  * Idempotent. Safe to call repeatedly.
@@ -99,13 +99,13 @@ export function initGuildDir(guildDir: string, opts: InitGuildDirOptions = {}): 
     }
     writeFileSync(p.config, JSON.stringify(parsed.data, null, 2) + '\n', 'utf8')
   } else if (opts.config) {
-    // Merge overrides into the existing config non-destructively (R5.4)
+    // Merge overrides into the existing config non-destructively
     const existing = JSON.parse(readFileSync(p.config, 'utf8'))
     const merged = deepMerge(existing, opts.config)
     writeFileSync(p.config, JSON.stringify(merged, null, 2) + '\n', 'utf8')
   }
 
-  // Write secrets.json with mode 0600 (R5.5). Always present so the permission check has a file.
+  // Write secrets.json with mode 0600. Always present so the permission check has a file.
   if (!existsSync(p.secrets)) {
     writeFileSync(p.secrets, JSON.stringify(opts.secrets ?? {}, null, 2) + '\n', 'utf8')
     chmodSync(p.secrets, 0o600)
