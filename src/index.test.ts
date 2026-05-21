@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // --- Mocks Setup ---
 
-const { mockClient, TEST_SESSION_DIR } = vi.hoisted(() => {
+const { mockClient, TEST_SESSION_DIR, TEST_THREADS_DIR } = vi.hoisted(() => {
   const mockUser = { id: '123456789', tag: 'TestBot#1234' }
   const mockLogin = vi.fn().mockResolvedValue('token')
   const mockClientOn = vi.fn()
@@ -15,11 +15,10 @@ const { mockClient, TEST_SESSION_DIR } = vi.hoisted(() => {
     channels: { fetch: vi.fn() }
   }
   const tmpdirNative = require('node:os').tmpdir() as string
-  const TEST_SESSION_DIR = require('node:path').join(
-    tmpdirNative,
-    'test-sessions-' + Math.random().toString(36).slice(2),
-  )
-  return { mockClient, TEST_SESSION_DIR }
+  const suffix = Math.random().toString(36).slice(2)
+  const TEST_SESSION_DIR = require('node:path').join(tmpdirNative, 'test-sessions-' + suffix)
+  const TEST_THREADS_DIR = require('node:path').join(tmpdirNative, 'test-threads-' + suffix)
+  return { mockClient, TEST_SESSION_DIR, TEST_THREADS_DIR }
 })
 
 // 1. Mock Discord.js
@@ -74,6 +73,7 @@ vi.mock('@guildbot/guild-config', async (importOriginal) => {
       ...actual.paths(guildDir),
       sessions: TEST_SESSION_DIR,
       contextDir: require('node:path').join(TEST_SESSION_DIR, 'context'),
+      threads: TEST_THREADS_DIR,
     }),
   }
 })
@@ -94,8 +94,10 @@ describe('handleMessage', () => {
     vi.clearAllMocks()
 
     await fsp.mkdir(TEST_SESSION_DIR, { recursive: true })
+    await fsp.mkdir(TEST_THREADS_DIR, { recursive: true })
 
     mockReply = {
+      id: 'reply-msg-id',
       edit: vi.fn(),
       delete: vi.fn(),
       channel: { isThread: () => false, id: 'channel-id' }
@@ -147,6 +149,7 @@ describe('handleMessage', () => {
 
   afterEach(async () => {
     await fsp.rm(TEST_SESSION_DIR, { recursive: true, force: true }).catch(() => {})
+    await fsp.rm(TEST_THREADS_DIR, { recursive: true, force: true }).catch(() => {})
   })
 
   // --- Entry conditions ---
@@ -204,7 +207,10 @@ describe('handleMessage', () => {
     expect(agentLoop).toHaveBeenCalledWith(
       expect.objectContaining({
         userMessage: expect.stringContaining('what is the meaning of life'),
-        conversationHistory: [],
+        // For a brand-new thread, prior history is just the guild-prompt seed
+        // (if prompt.md is non-empty) — never the current user message itself
+        // (the loop adds that via the userMessage field).
+        conversationHistory: expect.any(Array),
         context: expect.objectContaining({
           guildId: 'guild-id',
           channelId: 'channel-id',
@@ -212,6 +218,8 @@ describe('handleMessage', () => {
         }),
       })
     )
+    const callArgs = vi.mocked(agentLoop).mock.calls[0][0]
+    expect(callArgs.conversationHistory.every((m: any) => m.role !== 'user')).toBe(true)
     expect(mockReply.edit).toHaveBeenCalledWith({ content: 'Here is my answer.' })
   })
 

@@ -13,6 +13,7 @@ import {
 import { buildMermaid, exportMermaid } from '@guildbot/exporters'
 import { initGuildDir, syncFromCodebase } from '@guildbot/guild-config'
 import { loadToolHandler } from './tools/discover'
+import { cmdThread } from './cli-thread'
 
 const CODEBASE_ROOT = path.join(import.meta.dirname, '..')
 
@@ -200,6 +201,7 @@ async function main(argv: string[]) {
     else if (cmd === 'mermaid') await cmdMermaid(argv[1], argv[2])
     else if (cmd === 'init') await cmdInit(argv.slice(1))
     else if (cmd === 'sync') await cmdSync(argv.slice(1))
+    else if (cmd === 'thread') await cmdThread(argv.slice(1))
     else {
       console.log('Usage: guildbot <command> [args]')
       console.log('Commands:')
@@ -209,6 +211,7 @@ async function main(argv: string[]) {
       console.log('  mermaid    <input.txt> <output.mmd>')
       console.log('  init       <guild-dir>            — create/seed a new guild directory')
       console.log('  sync       <guild-dir> [--force]  — re-copy tools/skills from codebase')
+      console.log('  thread     <list|show|new|fork|chat> [args]')
       process.exit(1)
     }
   } catch (err: any) {

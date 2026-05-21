@@ -180,6 +180,86 @@ describe('agentLoop', () => {
     expect(systemMsg.content).toContain('A test skill')
   })
 
+  it('R3.2: should call onMessage for assistant + tool result + final assistant turns', async () => {
+    mockChat.mockResolvedValueOnce(toolCallResponse([{ name: 'echo-tool', arguments: { input: 'hi' } }]))
+    mockChat.mockResolvedValueOnce(noToolsResponse('All done'))
+
+    const messages: Array<{ role: string; content: string; toolCallId?: string }> = []
+    const onMessage = vi.fn(async (m: { role: string; content: string; toolCallId?: string }) => {
+      messages.push({ role: m.role, content: m.content, toolCallId: m.toolCallId })
+    })
+
+    const result = await agentLoop({
+      userMessage: 'Hi',
+      conversationHistory: [],
+      context: {},
+      model: 'test-model',
+      toolsDir: fixtureToolsDir,
+      skillsDir: fixtureSkillsDir,
+      onMessage,
+    })
+
+    expect(result).toBe('All done')
+    // 1) assistant turn with tool_calls
+    // 2) tool result
+    // 3) final assistant turn
+    expect(messages).toHaveLength(3)
+    expect(messages[0].role).toBe('assistant')
+    expect(messages[1].role).toBe('tool')
+    expect(messages[1].toolCallId).toBe('call_0')
+    expect(messages[2].role).toBe('assistant')
+    expect(messages[2].content).toBe('All done')
+  })
+
+  it('R3.4: onMessage errors abort the loop and propagate', async () => {
+    mockChat.mockResolvedValueOnce(noToolsResponse('Hello'))
+    const onMessage = vi.fn().mockRejectedValue(new Error('disk full'))
+
+    await expect(
+      agentLoop({
+        userMessage: 'Hi',
+        conversationHistory: [],
+        context: {},
+        model: 'test-model',
+        toolsDir: fixtureToolsDir,
+        skillsDir: fixtureSkillsDir,
+        onMessage,
+      }),
+    ).rejects.toThrow('disk full')
+  })
+
+  it('R3.1: accepts conversation history containing assistant + tool messages and forwards their core fields to chat()', async () => {
+    mockChat.mockResolvedValueOnce(noToolsResponse('OK'))
+    await agentLoop({
+      userMessage: 'continue',
+      conversationHistory: [
+        { role: 'user', content: 'prior question' },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ id: 'tc1', name: 'echo_tool', arguments: { input: 'x' } }],
+        },
+        {
+          role: 'tool',
+          content: '{"ok":true}',
+          toolCallId: 'tc1',
+          toolName: 'echo_tool',
+        },
+      ],
+      context: {},
+      model: 'test-model',
+      toolsDir: fixtureToolsDir,
+      skillsDir: fixtureSkillsDir,
+    })
+    const sent = mockChat.mock.calls[0][0].messages as Array<{ role: string; toolCallId?: string; toolCalls?: unknown }>
+    // system + 3 historical + final user
+    expect(sent.length).toBe(5)
+    const tool = sent.find((m) => m.role === 'tool')
+    expect(tool?.toolCallId).toBe('tc1')
+    const asst = sent.find((m) => m.role === 'assistant')
+    expect(asst?.toolCalls).toBeDefined()
+  })
+
   it('should call onProgress with status updates during the loop', async () => {
     mockChat.mockResolvedValueOnce(toolCallResponse([{ name: 'echo-tool', arguments: { input: 'hi' } }]))
     mockChat.mockResolvedValueOnce(noToolsResponse('Done'))
@@ -199,6 +279,19 @@ describe('agentLoop', () => {
     expect(onProgress).toHaveBeenCalledWith('Thinking...')
     expect(onProgress).toHaveBeenCalledWith('Using echo tool...')
     expect(onProgress.mock.calls.length).toBe(3)
+  })
+})
+
+describe('R3.3: agent loop platform independence', () => {
+  it('does not import @guildbot/threads or @guildbot/discord-index', async () => {
+    const fs = require('node:fs') as typeof import('node:fs')
+    const path = require('node:path') as typeof import('node:path')
+    const content = fs.readFileSync(path.join(__dirname, 'loop.ts'), 'utf8')
+    const importPattern = /(?:from\s+['"]|require\(\s*['"])([^'"\)]+)['"]/g
+    const imports = [...content.matchAll(importPattern)].map((m) => m[1])
+    expect(imports).not.toContain('@guildbot/threads')
+    expect(imports).not.toContain('@guildbot/discord-index')
+    expect(imports).not.toContain('discord.js')
   })
 })
 

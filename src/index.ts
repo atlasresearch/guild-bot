@@ -17,13 +17,17 @@ import fs from 'fs/promises'
 import { join } from 'node:path'
 import { initGuildDir, loadConfig, paths, resolveGuildDir } from '@guildbot/guild-config'
 import {
-  cloneAskQuestionContext,
   ensureSession,
   formatAttachmentsForPrompt,
-  getAskQuestionContext,
-  rememberAskQuestionContext,
   saveMessageAttachments
 } from './askQuestion'
+import {
+  appendMessage,
+  createThread,
+  readMessages,
+  type ThreadMessage,
+} from '@guildbot/threads'
+import { bindDiscord, resolveDiscord } from '@guildbot/discord-index'
 import { audioToTranscript, transcriptToDiagrams } from '@guildbot/media'
 import type { CldGenerator } from '@guildbot/media'
 import * as db from '@guildbot/database'
@@ -1018,16 +1022,50 @@ export async function handleMessage(message: Message) {
   }
 }
 
+/**
+ * Resolve an incoming Discord message to a guild-bot thread (R2.2):
+ *   1. If we are in a Discord thread channel bound to a guild-bot thread → that thread.
+ *   2. Else if the message is a direct reply (message.reference.messageId) to a bound
+ *      bot reply → that thread.
+ *   3. Else undefined.
+ * No reply-chain walking (intentional per plan 005).
+ */
+async function resolveExistingThread(message: Message): Promise<string | undefined> {
+  if (message.channel?.isThread?.()) {
+    const byThread = await resolveDiscord({ kind: 'thread', key: message.channelId })
+    if (byThread) return byThread
+  }
+  const refId = message.reference?.messageId
+  if (refId) {
+    const byReply = await resolveDiscord({ kind: 'reply', key: refId })
+    if (byReply) return byReply
+  }
+  return undefined
+}
+
+/**
+ * Read the guild's system prompt from disk. Plan 006 will own this; until then
+ * we read prompt.md directly. Returns empty string if the file is absent.
+ */
+async function readGuildSystemPrompt(): Promise<string> {
+  try {
+    return await fs.readFile(paths().prompt, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
 async function handleMessageInner(message: Message) {
   if (message.author.bot || message.system) return
 
   const botId = client.user?.id
   const isMention = botId ? message.mentions.has(botId) : false
-  const contextKey = message.channel?.isThread?.() ? message.channelId : message.reference?.messageId
-  const existingContext = await getAskQuestionContext(contextKey)
-  // const isThread = !!message.channel?.isThread?.()
 
-  if (!isMention && !existingContext) return
+  // R2.2: resolve thread (Discord thread channel → reply binding).
+  let threadId = await resolveExistingThread(message)
+
+  // R2.3: respond if a thread resolved OR the bot was mentioned; else bail.
+  if (!threadId && !isMention) return
 
   try {
     await (message.channel as TextChannel).sendTyping()
@@ -1043,21 +1081,25 @@ async function handleMessageInner(message: Message) {
     channelType === ChannelType.GuildText || channelType === ChannelType.GuildAnnouncement
 
   let reply: Message
-  const shouldCreateThread =
+  const shouldCreateDiscordThread =
+    !threadId &&
     isMention &&
     !message.reference &&
     !message.channel.isThread?.() &&
     message.guild &&
     channelSupportsThreads
 
-  if (shouldCreateThread) {
+  let createdDiscordThreadChannelId: string | undefined
+
+  if (shouldCreateDiscordThread) {
     const rawContent = message.content.replace(/<@!?[0-9]+>/g, '').trim()
     const threadName = rawContent.substring(0, 50) || 'Thread'
     try {
       const thread = await message.startThread({
         name: threadName,
-        autoArchiveDuration: 60
+        autoArchiveDuration: 60,
       })
+      createdDiscordThreadChannelId = thread.id
       reply = await thread.send('Thinking...')
     } catch (e) {
       console.warn('Failed to start thread, falling back to inline reply', e)
@@ -1070,22 +1112,46 @@ async function handleMessageInner(message: Message) {
   const raw = message.content || ''
   const cleaned = botId ? raw.replace(new RegExp(`<@!?${botId}>`, 'g'), '').trim() : raw.trim()
   const question = cleaned || raw.trim()
+  const guildId = message.guildId ?? 'unknown'
 
-  let sessionContext = existingContext
+  // Create a guild-bot thread if we don't have one yet. Seed it with the
+  // guild's system prompt as kind:'guild-prompt' (plan 005 system-prompt seeding).
+  if (!threadId) {
+    const created = await createThread({
+      guildId: `discord:${guildId}`,
+      title: question.slice(0, 80) || undefined,
+    })
+    threadId = created.id
+    const guildPrompt = await readGuildSystemPrompt()
+    if (guildPrompt.trim()) {
+      await appendMessage(threadId, {
+        role: 'system',
+        kind: 'guild-prompt',
+        content: guildPrompt,
+      })
+    }
+    if (createdDiscordThreadChannelId) {
+      await bindDiscord({
+        kind: 'thread',
+        key: createdDiscordThreadChannelId,
+        threadId,
+      })
+    }
+  }
+
+  // Session storage still owns attachment files (downstream tools read from here).
+  // The thread's attachments/ dir is reserved for plan 005's fork-copy semantics
+  // and will be populated by a later migration.
+  const sessionDir = paths().sessions
+  const session = await ensureSession(undefined, sessionDir, 'text')
+  const sessionContext = {
+    sessionId: session.id,
+    sessionDir,
+    sourceId: session.title || 'text',
+  }
 
   try {
-    if (!sessionContext) {
-      const sessionDir = paths().sessions
-      const session = await ensureSession(undefined, sessionDir, 'text')
-      sessionContext = {
-        sessionId: session.id,
-        sessionDir,
-        sourceId: session.title || 'text'
-      }
-    }
-
     const referencedMessage = await findReferencedMessage(message)
-
     const mapAttachment = (a: any) => ({ url: a.url, name: a.name, contentType: a.contentType })
 
     const referencedAttachments = referencedMessage
@@ -1093,7 +1159,7 @@ async function handleMessageInner(message: Message) {
           sessionContext.sessionDir,
           sessionContext.sessionId,
           referencedMessage.id,
-          Array.from(referencedMessage.attachments.values()).map(mapAttachment)
+          Array.from(referencedMessage.attachments.values()).map(mapAttachment),
         )
       : []
 
@@ -1101,35 +1167,48 @@ async function handleMessageInner(message: Message) {
       sessionContext.sessionDir,
       sessionContext.sessionId,
       message.id,
-      Array.from(message.attachments.values()).map(mapAttachment)
+      Array.from(message.attachments.values()).map(mapAttachment),
     )
 
     const contextParts: string[] = []
-
     if (referencedMessage?.content) {
       contextParts.push(`Referenced Message:\n${referencedMessage.content}`)
     }
-
     const refAttString = await formatAttachmentsForPrompt(referencedAttachments)
     if (refAttString) contextParts.push(`Referenced Attachments:\n${refAttString}`)
-
     const curAttString = await formatAttachmentsForPrompt(currentAttachments)
     if (curAttString) contextParts.push(`Current Message Attachments:\n${curAttString}`)
-
     if (question) contextParts.push(`User Question:\n${question}`)
-
     const fullContext = contextParts.join('\n\n')
 
-    // Route through agent loop — tool selection and dispatch handled by Qwen3.6
+    // R3.6: load prior history BEFORE appending the current user message, so
+    // the agent loop sees prior turns and the loop itself adds the current
+    // userMessage to its prompt (avoiding duplication).
+    const history: ThreadMessage[] = await readMessages(threadId)
+
+    // R2.6: persist the user turn with sourceRef tying it to Discord.
+    await appendMessage(threadId, {
+      role: 'user',
+      content: question,
+      sourceRef: {
+        platform: 'discord',
+        messageId: message.id,
+        channelId: message.channelId,
+        userId: message.author.id,
+      },
+    })
+
+    // R3.5: wire onMessage to appendMessage. Errors propagate (R3.4).
     const answer = await agentLoop({
       userMessage: fullContext,
-      conversationHistory: [],
+      conversationHistory: history,
       context: {
         guildId: message.guildId ?? undefined,
         channelId: message.channelId,
         userId: message.author.id,
         sessionDir: sessionContext.sessionDir,
-      },
+        threadId,
+      } as any,
       model: loadConfig().llm.models.default,
       onProgress: (status) => {
         reply.edit(status).catch(() => {})
@@ -1137,15 +1216,35 @@ async function handleMessageInner(message: Message) {
           reply.channel.sendTyping().catch(() => {})
         }
       },
+      onMessage: async (m) => {
+        await appendMessage(threadId!, {
+          role: m.role,
+          content: m.content,
+          toolName: m.toolName,
+          toolCallId: m.toolCallId,
+          toolCalls: m.toolCalls,
+          sourceRef:
+            m.role === 'assistant'
+              ? { platform: 'discord', channelId: message.channelId }
+              : undefined,
+        })
+      },
     })
 
     if (answer.length > 2000) {
       const att = new AttachmentBuilder(Buffer.from(answer, 'utf-8'), {
-        name: `answer.txt`
+        name: `answer.txt`,
       })
       await reply.edit({ content: '', files: [att] })
     } else {
       await reply.edit({ content: answer })
+    }
+
+    // R2.5: bind the assistant reply ID so replies to it resolve back to this thread.
+    try {
+      await bindDiscord({ kind: 'reply', key: reply.id, threadId })
+    } catch (e) {
+      console.warn('Failed to bind assistant reply to thread', e)
     }
   } catch (e) {
     try {
@@ -1153,13 +1252,8 @@ async function handleMessageInner(message: Message) {
     } catch {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (message.channel as any).send(
-        `Error processing your question: ${e instanceof Error ? e.message : String(e)}`
+        `Error processing your question: ${e instanceof Error ? e.message : String(e)}`,
       )
-    }
-  } finally {
-    const targetKey = reply.channel?.isThread?.() ? reply.channelId : undefined
-    if (targetKey && sessionContext) {
-      await rememberAskQuestionContext(targetKey, sessionContext)
     }
   }
 }
@@ -1167,10 +1261,16 @@ async function handleMessageInner(message: Message) {
 client.on('messageCreate', handleMessage)
 
 client.on('threadCreate', async (thread) => {
+  // A human created a Discord thread on a bot reply we already bound. Mirror
+  // that binding to the new thread channel so follow-ups in the thread resolve
+  // to the same guild-bot thread.
   try {
     const starter = await thread.fetchStarterMessage()
     if (!starter) return
-    await cloneAskQuestionContext((starter as any).id, thread.id)
+    const existing = await resolveDiscord({ kind: 'reply', key: (starter as any).id })
+    if (existing) {
+      await bindDiscord({ kind: 'thread', key: thread.id, threadId: existing })
+    }
   } catch (e) {
     console.warn('threadCreate handler failed', e)
   }

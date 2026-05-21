@@ -17,6 +17,9 @@ importers:
       '@guildbot/database':
         specifier: workspace:*
         version: link:modules/database
+      '@guildbot/discord-index':
+        specifier: workspace:*
+        version: link:modules/discord-index
       '@guildbot/embedding':
         specifier: workspace:*
         version: link:modules/embedding
@@ -44,6 +47,9 @@ importers:
       '@guildbot/recording':
         specifier: workspace:*
         version: link:modules/recording
+      '@guildbot/threads':
+        specifier: workspace:*
+        version: link:modules/threads
       '@guildbot/types':
         specifier: workspace:*
         version: link:modules/types
@@ -172,6 +178,18 @@ importers:
         specifier: ^0.23.0
         version: 0.23.0(apache-arrow@18.1.0)
 
+  modules/discord-index:
+    dependencies:
+      '@guildbot/guild-config':
+        specifier: workspace:*
+        version: link:../guild-config
+      '@guildbot/interfaces':
+        specifier: workspace:*
+        version: link:../interfaces
+      '@guildbot/threads':
+        specifier: workspace:*
+        version: link:../threads
+
   modules/embedding:
     dependencies:
       '@guildbot/llm':
@@ -272,6 +290,18 @@ importers:
       ws:
         specifier: ^8.18.3
         version: 8.20.1
+
+  modules/threads:
+    dependencies:
+      '@guildbot/guild-config':
+        specifier: workspace:*
+        version: link:../guild-config
+      '@guildbot/interfaces':
+        specifier: workspace:*
+        version: link:../interfaces
+      ulid:
+        specifier: ^2.3.0
+        version: 2.4.0
 
   modules/types:
     dependencies:
@@ -3929,6 +3959,10 @@ packages:
 
   ufo@1.6.4:
     resolution: {integrity: sha512-JFNbkD1Svwe0KvGi8GOeLcP4kAWQ609twvCdcHxq1oSL8svv39ZuSvajcD8B+5D0eL4+s1Is2D/O6KN3qcTeRA==}
+
+  ulid@2.4.0:
+    resolution: {integrity: sha512-fIRiVTJNcSRmXKPZtGzFQv9WRrZ3M9eoptl/teFJvjOzmpU+/K/JH6HZ8deBfb5vMEpicJcLn7JmvdknlMq7Zg==}
+    hasBin: true
 
   undici-types@5.26.5:
     resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
@@ -7760,6 +7794,8 @@ snapshots:
   typical@7.3.0: {}
 
   ufo@1.6.4: {}
+
+  ulid@2.4.0: {}
 
   undici-types@5.26.5: {}
 
