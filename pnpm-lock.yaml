@@ -231,6 +231,8 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
+  modules/llm-edit: {}
+
   modules/media:
     dependencies:
       '@guildbot/exporters':
@@ -327,6 +329,21 @@ importers:
         specifier: workspace:*
         version: link:../../modules/types
 
+  tools/edit-file:
+    dependencies:
+      '@guildbot/guild-config':
+        specifier: workspace:*
+        version: link:../../modules/guild-config
+      '@guildbot/interfaces':
+        specifier: workspace:*
+        version: link:../../modules/interfaces
+      '@guildbot/llm-edit':
+        specifier: workspace:*
+        version: link:../../modules/llm-edit
+      '@guildbot/types':
+        specifier: workspace:*
+        version: link:../../modules/types
+
   tools/export-kumu-json:
     dependencies:
       '@guildbot/exporters':
@@ -396,11 +413,38 @@ importers:
         specifier: workspace:*
         version: link:../../modules/types
 
+  tools/read-file:
+    dependencies:
+      '@guildbot/guild-config':
+        specifier: workspace:*
+        version: link:../../modules/guild-config
+      '@guildbot/llm-edit':
+        specifier: workspace:*
+        version: link:../../modules/llm-edit
+      '@guildbot/types':
+        specifier: workspace:*
+        version: link:../../modules/types
+
   tools/remove-tags:
     dependencies:
       '@guildbot/message-processor':
         specifier: workspace:*
         version: link:../../modules/message-processor
+      '@guildbot/types':
+        specifier: workspace:*
+        version: link:../../modules/types
+
+  tools/rewrite-file:
+    dependencies:
+      '@guildbot/guild-config':
+        specifier: workspace:*
+        version: link:../../modules/guild-config
+      '@guildbot/interfaces':
+        specifier: workspace:*
+        version: link:../../modules/interfaces
+      '@guildbot/llm-edit':
+        specifier: workspace:*
+        version: link:../../modules/llm-edit
       '@guildbot/types':
         specifier: workspace:*
         version: link:../../modules/types

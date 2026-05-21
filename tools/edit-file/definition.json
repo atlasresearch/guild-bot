@@ -1,0 +1,39 @@
+{
+  "type": "function",
+  "function": {
+    "name": "edit_file",
+    "description": "Edit a file by replacing exact-match search blocks with new content. SEARCH must match the file character-for-character (whitespace, indentation, line breaks). Include 2-3 lines of unchanged context around each change so the match is unambiguous. To delete text, set replace to ''. Multiple blocks apply in order, top-to-bottom; if any block fails to match, NO changes are written and you get structured feedback you can use to retry on your next turn. Keep each search block under ~30 lines — if a change is larger, split into more blocks or use rewrite_file instead (long blocks risk JSON-output truncation on local models). The file must be covered by config.tools.editAllowlist. Call read_file first to see exact current content.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Path relative to the guild dir; must be allowlisted."
+        },
+        "blocks": {
+          "type": "array",
+          "description": "Search/replace blocks, applied in order.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "search": {
+                "type": "string",
+                "description": "Exact text to replace. Multi-line OK. Match the file character-for-character including whitespace and indentation."
+              },
+              "replace": {
+                "type": "string",
+                "description": "Replacement text. Empty string deletes the matched text."
+              },
+              "start_line": {
+                "type": "integer",
+                "description": "Optional 1-based line hint when search may match more than once. The matcher restricts its fuzzy search to ±10 lines of the hint."
+              }
+            },
+            "required": ["search", "replace"]
+          }
+        }
+      },
+      "required": ["file_path", "blocks"]
+    }
+  }
+}

@@ -168,6 +168,69 @@ describe('loadConfig', () => {
     expect(() => loadConfig(guildDir)).toThrowError(/secrets\.json not found/)
   })
 
+  // editAllowlist (plan 006)
+  it('defaults tools.editAllowlist to an empty array when omitted', () => {
+    writeConfig(guildDir, VALID_CONFIG) // no tools.editAllowlist
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    const cfg = loadConfig(guildDir)
+    expect(cfg.tools.editAllowlist).toEqual([])
+  })
+
+  it('accepts a valid editAllowlist with exact paths and single-segment wildcards', () => {
+    writeConfig(guildDir, {
+      ...VALID_CONFIG,
+      tools: { disabled: [], editAllowlist: ['prompt.md', 'memory.md', 'snippets/*.md'] },
+    })
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    const cfg = loadConfig(guildDir)
+    expect(cfg.tools.editAllowlist).toEqual(['prompt.md', 'memory.md', 'snippets/*.md'])
+  })
+
+  it('rejects an editAllowlist entry that starts with /', () => {
+    writeConfig(guildDir, {
+      ...VALID_CONFIG,
+      tools: { disabled: [], editAllowlist: ['/etc/passwd'] },
+    })
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    expect(() => loadConfig(guildDir)).toThrowError(/must be relative paths/)
+  })
+
+  it('rejects an editAllowlist entry containing ..', () => {
+    writeConfig(guildDir, {
+      ...VALID_CONFIG,
+      tools: { disabled: [], editAllowlist: ['../sibling/file.md'] },
+    })
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    expect(() => loadConfig(guildDir)).toThrowError(/must not contain ".."/)
+  })
+
+  it('rejects an editAllowlist entry using **', () => {
+    writeConfig(guildDir, {
+      ...VALID_CONFIG,
+      tools: { disabled: [], editAllowlist: ['**/foo.md'] },
+    })
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    expect(() => loadConfig(guildDir)).toThrowError(/recursive globs/)
+  })
+
+  it('rejects an editAllowlist entry using character classes', () => {
+    writeConfig(guildDir, {
+      ...VALID_CONFIG,
+      tools: { disabled: [], editAllowlist: ['[abc].md'] },
+    })
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    expect(() => loadConfig(guildDir)).toThrowError(/character classes/)
+  })
+
+  it('rejects an editAllowlist entry using brace expansion', () => {
+    writeConfig(guildDir, {
+      ...VALID_CONFIG,
+      tools: { disabled: [], editAllowlist: ['{a,b}.md'] },
+    })
+    writeSecrets(guildDir, { 'discord.token': 'fake' })
+    expect(() => loadConfig(guildDir)).toThrowError(/brace expansion/)
+  })
+
   // Happy path
   it('returns a fully resolved config with $secret values substituted', () => {
     writeConfig(guildDir, {

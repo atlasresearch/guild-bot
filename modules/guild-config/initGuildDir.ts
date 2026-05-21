@@ -37,7 +37,7 @@ function defaultConfig(): RawGuildConfig {
       compaction: { thresholdMessages: 60, thresholdTokens: 20000, keepLastN: 10 },
     },
     memory: { maxBytes: 32000, extractionEnabled: true, operatorRoleIds: [] },
-    tools: { disabled: [] },
+    tools: { disabled: [], editAllowlist: ['prompt.md', 'memory.md'] },
   }
 }
 

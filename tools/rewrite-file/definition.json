@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "rewrite_file",
+    "description": "Replace the entire content of a file with new content. Use this when the change is large enough that search/replace blocks would be unwieldy, OR when the file is small enough (~few KB) that a full rewrite is cheaper than computing surgical blocks. Also use this to create a file that does not yet exist (within an allowlisted path). The file's prior content for prompt.md / memory.md is captured in plan 007's history; for other allowlisted files there is no automatic history.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Path relative to the guild dir; must be allowlisted."
+        },
+        "content": {
+          "type": "string",
+          "description": "Complete new file content."
+        }
+      },
+      "required": ["file_path", "content"]
+    }
+  }
+}

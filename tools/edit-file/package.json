@@ -1,0 +1,12 @@
+{
+  "name": "@guildbot/tool-edit-file",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@guildbot/guild-config": "workspace:*",
+    "@guildbot/interfaces": "workspace:*",
+    "@guildbot/llm-edit": "workspace:*",
+    "@guildbot/types": "workspace:*"
+  }
+}

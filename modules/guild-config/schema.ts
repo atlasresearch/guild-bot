@@ -128,9 +128,35 @@ export const memoryBlockSchema = z
   })
   .strict()
 
+// Allowlist entries are guild-dir-relative glob patterns. They are matched in
+// handlers by @guildbot/llm-edit's in-house glob (exact + single-segment `*`),
+// so we reject anything that wouldn't be applied:
+//   - absolute paths (we don't escape the guild dir)
+//   - parent traversal (..)
+//   - recursive globs (**)
+//   - character classes ([abc])
+//   - brace expansion ({a,b})
+const editAllowlistEntrySchema = z
+  .string()
+  .min(1, 'editAllowlist entries must be non-empty')
+  .refine((s) => !s.startsWith('/'), { message: 'editAllowlist entries must be relative paths' })
+  .refine((s) => !s.split('/').includes('..'), {
+    message: 'editAllowlist entries must not contain ".."',
+  })
+  .refine((s) => !s.includes('**'), {
+    message: 'editAllowlist does not support recursive globs (**) — use multiple explicit entries',
+  })
+  .refine((s) => !s.includes('['), {
+    message: 'editAllowlist does not support character classes ([...]) — use multiple explicit entries',
+  })
+  .refine((s) => !s.includes('{'), {
+    message: 'editAllowlist does not support brace expansion ({a,b}) — use multiple explicit entries',
+  })
+
 export const toolsBlockSchema = z
   .object({
     disabled: z.array(z.string()).default([]),
+    editAllowlist: z.array(editAllowlistEntrySchema).default([]),
   })
   .strict()
 
@@ -151,7 +177,7 @@ export const rawGuildConfigSchema = z
       extractionEnabled: true,
       operatorRoleIds: [],
     }),
-    tools: toolsBlockSchema.default({ disabled: [] }),
+    tools: toolsBlockSchema.default({ disabled: [], editAllowlist: [] }),
   })
   .strict()
 
@@ -184,7 +210,7 @@ export type GuildConfig = {
   recording: { whisperModel?: string | null }
   threads: { compaction: { thresholdMessages: number; thresholdTokens: number; keepLastN: number } }
   memory: { maxBytes: number; extractionEnabled: boolean; operatorRoleIds: string[] }
-  tools: { disabled: string[] }
+  tools: { disabled: string[]; editAllowlist: string[] }
 }
 
 export const secretsFileSchema = z.record(z.string().min(1), z.string())

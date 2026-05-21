@@ -52,6 +52,7 @@
   },
 
   "tools": {
-    "disabled": []
+    "disabled": [],
+    "editAllowlist": ["prompt.md", "memory.md"]
   }
 }

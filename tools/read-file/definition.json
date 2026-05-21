@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "read_file",
+    "description": "Read the current contents of a file under the guild dir. Returns the full text, line count, and a line-numbered view (\"   1: ...\" prefixes). Use this before edit_file so your search blocks match the file character-for-character. The file must be covered by config.tools.editAllowlist.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "type": "string",
+          "description": "Path relative to the guild dir (e.g. 'prompt.md', 'memory.md', 'snippets/intro.md'). Must match an entry in config.tools.editAllowlist. Absolute paths and any path containing '..' are rejected."
+        }
+      },
+      "required": ["file_path"]
+    }
+  }
+}
