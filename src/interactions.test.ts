@@ -123,6 +123,31 @@ describe('handleInteraction', () => {
     expect(replyContent).not.toContain('Line 3')
   })
 
+  it('does not crash when editReply rejects with 50027 (token expired)', async () => {
+    // Previously, an editReply rejection escaped to the Client \'error\' event
+    // (no listener) and crashed the process. The outer try/catch in
+    // handleInteraction must swallow it.
+    mockInteraction.options.getSubcommand.mockReturnValue('search')
+    mockInteraction.options.getString.mockReturnValue('test query')
+
+    vi.mocked(ragService.search).mockResolvedValue([
+      {
+        id: 'msg-1',
+        user_id: 'user-1',
+        content: 'Hello world',
+        timestamp: 1600000000000,
+        guild_id: 'guild-1',
+        channel_id: 'channel-1'
+      } as any
+    ])
+
+    const tokenErr: any = new Error('Invalid Webhook Token')
+    tokenErr.code = 50027
+    mockInteraction.editReply = vi.fn().mockRejectedValue(tokenErr)
+
+    await expect(handleInteraction(mockInteraction)).resolves.not.toThrow()
+  })
+
   it('should create a thread and send chunks if results are long', async () => {
     mockInteraction.options.getSubcommand.mockReturnValue('search')
     mockInteraction.options.getString.mockReturnValue('test query')

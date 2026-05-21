@@ -420,7 +420,54 @@ client.once('ready', async () => {
 
 // We no longer expose a free-text prefix command. Interactions only.
 
+/**
+ * Discord interaction tokens expire 15 minutes after the interaction is
+ * created. Long-running flows (e.g. transcribing a big call before /record
+ * stop replies) blow past that and `editReply` throws `DiscordAPIError[50027]
+ * Invalid Webhook Token`. When that happens, fall back to posting the payload
+ * to the originating channel directly so the user still sees the result.
+ *
+ * Returns true if the user was reached (via editReply or channel.send),
+ * false if neither worked.
+ */
+async function safeInteractionReply(
+  chat: ChatInputCommandInteraction,
+  payload: any,
+): Promise<boolean> {
+  try {
+    await chat.editReply(payload)
+    return true
+  } catch (e: any) {
+    const tokenExpired = e?.code === 50027 || /Invalid Webhook Token/i.test(e?.message ?? '')
+    if (!tokenExpired) {
+      console.warn('[safeInteractionReply] editReply failed (non-token)', e)
+    }
+    const channel: any = chat.channel
+    if (channel && typeof channel.send === 'function') {
+      try {
+        await channel.send(payload)
+        return true
+      } catch (e2) {
+        console.error('[safeInteractionReply] channel.send fallback failed', e2)
+      }
+    }
+    return false
+  }
+}
+
 export async function handleInteraction(interaction: Interaction) {
+  try {
+    await handleInteractionInner(interaction)
+  } catch (err) {
+    // Any error escaping the inner handler is routed by discord.js to the
+    // Client's 'error' event, which has no default listener and crashes the
+    // process. Catch + log instead. Individual command branches own their own
+    // user-facing failure messaging.
+    console.error('[handleInteraction] unhandled error:', err)
+  }
+}
+
+async function handleInteractionInner(interaction: Interaction) {
   if (!interaction.isChatInputCommand()) return
   const chat = interaction as ChatInputCommandInteraction
 
@@ -791,7 +838,7 @@ export async function handleInteraction(interaction: Interaction) {
         const sess = await stopRecording(guild.id)
 
         if (!sess.vttPath) {
-          await chat.editReply('Recording was cancelled or did not produce any audio.')
+          await safeInteractionReply(chat, 'Recording was cancelled or did not produce any audio.')
           return
         }
 
@@ -801,7 +848,7 @@ export async function handleInteraction(interaction: Interaction) {
           chat.channel
 
         if (!ensureSendableChannel(transcriptChannel)) {
-          await chat.editReply({ content: 'Failed to find a text channel to post the transcript.' })
+          await safeInteractionReply(chat, { content: 'Failed to find a text channel to post the transcript.' })
           return
         }
 
@@ -812,15 +859,17 @@ export async function handleInteraction(interaction: Interaction) {
         }
 
         if (transcriptChannel.id === chat.channelId) {
-          await chat.editReply(transcriptPayload)
+          // editReply will likely fail if transcription took >15 min; safeInteractionReply
+          // falls back to channel.send so the user still gets the VTT.
+          await safeInteractionReply(chat, transcriptPayload)
         } else {
-          await chat.editReply({
+          await safeInteractionReply(chat, {
             content: `✅ Transcript ready (ID: ${sess.recordingId}). Posted to <#${transcriptChannel.id}>.`
           })
           try {
             await transcriptChannel.send(transcriptPayload)
           } catch (e: any) {
-            await chat.editReply({
+            await safeInteractionReply(chat, {
               content: `❌ Failed to post transcript to <#${transcriptChannel.id}>: ${e?.message ?? e}`
             })
             return
@@ -860,7 +909,10 @@ export async function handleInteraction(interaction: Interaction) {
         followUpTranscription()
         */
       } catch (e: any) {
-        await chat.editReply({ content: `Failed to stop recording: ${e?.message ?? e}` })
+        // The most common failure here is a 50027 (token expired after long
+        // transcription). safeInteractionReply falls back to channel.send so
+        // we don't both fail to deliver the message AND crash the process.
+        await safeInteractionReply(chat, { content: `Failed to stop recording: ${e?.message ?? e}` })
       }
     }
   }
