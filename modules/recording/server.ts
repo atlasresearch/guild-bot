@@ -9,7 +9,6 @@ import { ensureWhisperAvailable, transcribeWithWhisper } from '@guildbot/interfa
 
 type UserState = {
   buf: Buffer
-  elapsedSec: number
   chunkIndex: number
   wavPath: string
   bytes: number
@@ -17,7 +16,7 @@ type UserState = {
   samplesWritten: number
   userName?: string
 }
-type QueueItem = { userId: string; buf: Buffer }
+type QueueItem = { userId: string; buf: Buffer; startEpochMs: number }
 
 type Session = {
   id: string
@@ -84,7 +83,7 @@ function makeWav(pcm: Buffer, rate: number, channels: number) {
   return Buffer.concat([header, pcm])
 }
 
-function tsToSeconds(ts: string) {
+export function tsToSeconds(ts: string) {
   const m = ts.match(/(\d{2}):(\d{2}):(\d{2})\.(\d{3})/)
   if (!m) return 0
   const h = Number(m[1]),
@@ -94,17 +93,18 @@ function tsToSeconds(ts: string) {
   return h * 3600 + mnt * 60 + s + ms / 1000
 }
 
-function secondsToTs(sec: number) {
-  const h = Math.floor(sec / 3600)
-  const rem = sec - h * 3600
-  const m = Math.floor(rem / 60)
-  const s = Math.floor(rem - m * 60)
-  const ms = Math.round((sec - Math.floor(sec)) * 1000)
-  const pad = (n: number, w: number) => n.toString().padStart(w, '0')
-  return `${pad(h, 2)}:${pad(m, 2)}:${pad(s, 2)}.${pad(ms, 3)}`
-}
-
-async function appendVttWithOffset(destPath: string, chunkPath: string, offsetSec: number, userName?: string) {
+/**
+ * Append a Whisper-produced chunk VTT to the session's combined VTT, rewriting
+ * each cue's relative `HH:MM:SS.mmm --> HH:MM:SS.mmm` line into absolute
+ * ISO 8601 UTC instants anchored at `chunkStartEpochMs` (wall-clock time when
+ * the first sample of this chunk was captured).
+ */
+export async function appendVttWithUtcAnchor(
+  destPath: string,
+  chunkPath: string,
+  chunkStartEpochMs: number,
+  userName?: string,
+) {
   const raw = await fsp.readFile(chunkPath, 'utf8')
   const lines = raw.split(/\r?\n/)
   const out: string[] = []
@@ -113,17 +113,15 @@ async function appendVttWithOffset(destPath: string, chunkPath: string, offsetSe
     const l = lines[i]
     if (l.includes('-->')) {
       const [a, b] = l.split('-->')
-      const as = tsToSeconds(a.trim()) + offsetSec
-      const bs = tsToSeconds(b.trim()) + offsetSec
-      out.push(`${secondsToTs(as)} --> ${secondsToTs(bs)}`)
-      // next non-empty line is the cue text; prefix once with speaker
+      const aMs = chunkStartEpochMs + Math.round(tsToSeconds(a.trim()) * 1000)
+      const bMs = chunkStartEpochMs + Math.round(tsToSeconds(b.trim()) * 1000)
+      out.push(`${new Date(aMs).toISOString()} --> ${new Date(bMs).toISOString()}`)
       expectTextPrefix = true
     } else if (l.trim() === 'WEBVTT') {
       // skip header; we'll write our own on first write
     } else {
       if (expectTextPrefix && l.trim() !== '') {
         if (userName) {
-          // prefix with <v Name> marker
           const safe = String(userName).replace(/<|>/g, '')
           out.push(`<v ${safe}> ${l}`)
         } else {
@@ -141,7 +139,7 @@ async function appendVttWithOffset(destPath: string, chunkPath: string, offsetSe
   await fsp.appendFile(destPath, out.join('\n') + '\n')
 }
 
-async function processChunk(sess: Session, userId: string, pcmChunk: Buffer) {
+async function processChunk(sess: Session, userId: string, pcmChunk: Buffer, startEpochMs: number) {
   const u = sess.users.get(userId)!
   // Use temporary files for Whisper input/output; do not litter recording folder
   const tmpDir = path.join(os.tmpdir(), 'discord-rec-chunks')
@@ -157,10 +155,8 @@ async function processChunk(sess: Session, userId: string, pcmChunk: Buffer) {
   const cfgWhisper = loadConfig().recording.whisperModel
   const model = cfgWhisper || path.join(os.homedir(), 'models/ggml-base.en.bin')
   await transcribeWithWhisper(model, wavTmp, vttTmp, outBase)
-  await appendVttWithOffset(sess.vttPath, vttTmp, u.elapsedSec, u.userName)
+  await appendVttWithUtcAnchor(sess.vttPath, vttTmp, startEpochMs, u.userName)
 
-  const secs = pcmChunk.length / sess.bytesPerSec
-  u.elapsedSec += secs
   u.chunkIndex++
 
   try {
@@ -178,7 +174,7 @@ async function processQueue(sess: Session) {
     while (sess.queue.length > 0) {
       const item = sess.queue.shift() as QueueItem
       try {
-        await processChunk(sess, item.userId, item.buf)
+        await processChunk(sess, item.userId, item.buf, item.startEpochMs)
       } catch (e) {
         console.warn('[rec-server] chunk processing failed', e)
       }
@@ -306,7 +302,6 @@ async function handlePcm(recId: string, rate: number, channels: number, pcm: Buf
     }
     u = {
       buf: Buffer.alloc(0),
-      elapsedSec: 0,
       chunkIndex: 0,
       wavPath,
       bytes: 0,
@@ -346,7 +341,12 @@ async function handlePcm(recId: string, rate: number, channels: number, pcm: Buf
   u.buf = Buffer.concat([u.buf, pcm])
   while (u.buf.length >= session.bytesPerChunk) {
     const { head, tail } = takeBytes(u.buf, session.bytesPerChunk)
-    session.queue.push({ userId, buf: head })
+    // Anchor each chunk's cues to the wall-clock instant its first sample was
+    // captured. Slicing happens synchronously inside handlePcm, so Date.now()
+    // reflects the arrival of the byte that crossed the threshold.
+    const chunkDurationMs = (head.length / session.bytesPerSec) * 1000
+    const startEpochMs = Date.now() - chunkDurationMs
+    session.queue.push({ userId, buf: head, startEpochMs })
     u.buf = tail
   }
   // kick queue processor asynchronously
@@ -392,7 +392,9 @@ async function handleStop(recId: string) {
   // queue any tail (shorter than full chunk) for each user
   for (const [userId, u] of sess.users.entries()) {
     if (u.buf.length > 0) {
-      sess.queue.push({ userId, buf: u.buf })
+      const chunkDurationMs = (u.buf.length / sess.bytesPerSec) * 1000
+      const startEpochMs = Date.now() - chunkDurationMs
+      sess.queue.push({ userId, buf: u.buf, startEpochMs })
       u.buf = Buffer.alloc(0)
     }
   }
