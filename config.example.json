@@ -21,7 +21,7 @@
     "baseUrl": "http://localhost:11434",
     "apiKey": null,
     "models": {
-      "default": "qwen3.6",
+      "default": "qwen3.6:35b-a3b-q4_K_M",
       "chat": null,
       "embed": "nomic-embed-text",
       "structured": null

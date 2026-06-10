@@ -21,7 +21,7 @@ const baseRaw = (overrides: Record<string, unknown> = {}) => ({
   id: 'cmpl',
   object: 'chat.completion',
   created: 0,
-  model: 'qwen3.6',
+  model: 'qwen3.6:35b-a3b-q4_K_M',
   choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'hi' } }],
   usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
   ...overrides,
@@ -37,12 +37,12 @@ describe('openai-compat provider', () => {
   it('forwards a basic chat() request to the SDK', async () => {
     mockCreate.mockResolvedValue(baseRaw())
     const out = await chat(
-      { model: 'qwen3.6', messages: [{ role: 'user', content: 'hello' }] },
+      { model: 'qwen3.6:35b-a3b-q4_K_M', messages: [{ role: 'user', content: 'hello' }] },
       { baseUrl: 'http://localhost:11434/v1', dialect: 'ollama-v1' },
     )
     expect(mockCreate).toHaveBeenCalledOnce()
     const args = mockCreate.mock.calls[0][0]
-    expect(args.model).toBe('qwen3.6')
+    expect(args.model).toBe('qwen3.6:35b-a3b-q4_K_M')
     expect(args.messages).toEqual([{ role: 'user', content: 'hello' }])
     expect(out.content).toBe('hi')
     expect(out.dialect).toBe('ollama-v1')
@@ -51,7 +51,7 @@ describe('openai-compat provider', () => {
   it('vllm dialect forwards extra_body.chat_template_kwargs when thinking=false', async () => {
     mockCreate.mockResolvedValue(baseRaw())
     await chat(
-      { model: 'qwen3.6', messages: [{ role: 'user', content: 'x' }], thinking: false },
+      { model: 'qwen3.6:35b-a3b-q4_K_M', messages: [{ role: 'user', content: 'x' }], thinking: false },
       { baseUrl: 'http://localhost:8000/v1', dialect: 'vllm' },
     )
     const args = mockCreate.mock.calls[0][0] as Record<string, unknown>
@@ -61,7 +61,7 @@ describe('openai-compat provider', () => {
   it('thinking=true against ollama-v1 throws UnsupportedCapabilityError', async () => {
     await expect(
       chat(
-        { model: 'qwen3.6', messages: [{ role: 'user', content: 'x' }], thinking: true },
+        { model: 'qwen3.6:35b-a3b-q4_K_M', messages: [{ role: 'user', content: 'x' }], thinking: true },
         { baseUrl: 'http://localhost:11434/v1', dialect: 'ollama-v1' },
       ),
     ).rejects.toThrow(/thinking/)
@@ -72,7 +72,7 @@ describe('openai-compat provider', () => {
     mockCreate.mockResolvedValue(baseRaw())
     await expect(
       chat(
-        { model: 'qwen3.6', messages: [{ role: 'user', content: 'x' }], thinking: false },
+        { model: 'qwen3.6:35b-a3b-q4_K_M', messages: [{ role: 'user', content: 'x' }], thinking: false },
         { baseUrl: 'http://localhost:11434/v1', dialect: 'ollama-v1' },
       ),
     ).resolves.toBeTruthy()

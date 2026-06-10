@@ -41,7 +41,7 @@ describe('RAGService', () => {
     mockChat.mockResolvedValue({
       content: 'The code is 1234',
       toolCalls: [],
-      model: 'qwen3.6',
+      model: 'qwen3.6:35b-a3b-q4_K_M',
       finishReason: 'stop',
     })
 

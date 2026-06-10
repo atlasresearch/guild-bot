@@ -61,7 +61,7 @@ describe('initGuildDir', () => {
     expect(cfg.guild.id).toBe('discord:abc')
     expect(cfg.llm.provider).toBe('openai-compat')
     // Default values still present
-    expect(cfg.llm.models.default).toBe('qwen3.6')
+    expect(cfg.llm.models.default).toBe('qwen3.6:35b-a3b-q4_K_M')
   })
 
   it('does NOT overwrite existing config.json on re-run', () => {

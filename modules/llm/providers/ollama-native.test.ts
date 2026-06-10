@@ -25,18 +25,18 @@ describe('ollama-native provider', () => {
 
   it('forwards a basic chat() request', async () => {
     mockChat.mockResolvedValue({
-      model: 'qwen3.6',
+      model: 'qwen3.6:35b-a3b-q4_K_M',
       message: { role: 'assistant', content: 'hi' },
       prompt_eval_count: 1,
       eval_count: 2,
     })
     const out = await chat(
-      { model: 'qwen3.6', messages: [{ role: 'user', content: 'hello' }] },
+      { model: 'qwen3.6:35b-a3b-q4_K_M', messages: [{ role: 'user', content: 'hello' }] },
       { baseUrl: 'http://localhost:11434' },
     )
     expect(mockChat).toHaveBeenCalledOnce()
     const args = mockChat.mock.calls[0][0]
-    expect(args.model).toBe('qwen3.6')
+    expect(args.model).toBe('qwen3.6:35b-a3b-q4_K_M')
     expect(args.messages).toEqual([{ role: 'user', content: 'hello' }])
     expect(args.think).toBe(false)
     expect(out.content).toBe('hi')
@@ -47,7 +47,7 @@ describe('ollama-native provider', () => {
   it('passes think=true when thinking is requested', async () => {
     mockChat.mockResolvedValue({ message: { role: 'assistant', content: '' } })
     await chat(
-      { model: 'qwen3.6', messages: [{ role: 'user', content: 'x' }], thinking: true },
+      { model: 'qwen3.6:35b-a3b-q4_K_M', messages: [{ role: 'user', content: 'x' }], thinking: true },
       {},
     )
     expect(mockChat.mock.calls[0][0].think).toBe(true)

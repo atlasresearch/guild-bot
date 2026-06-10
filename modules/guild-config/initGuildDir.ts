@@ -36,7 +36,7 @@ function defaultConfig(): RawGuildConfig {
       provider: 'ollama',
       baseUrl: 'http://localhost:11434',
       apiKey: undefined,
-      models: { default: 'qwen3.6', embed: 'nomic-embed-text' },
+      models: { default: 'qwen3.6:35b-a3b-q4_K_M', embed: 'nomic-embed-text' },
       embed: {},
     },
     recording: { whisperModel: null },

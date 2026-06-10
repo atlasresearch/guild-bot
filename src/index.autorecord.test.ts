@@ -55,7 +55,7 @@ vi.mock('@guildbot/guild-config', async (importOriginal) => {
       llm: {
         provider: 'ollama',
         baseUrl: 'http://mock-llm/v1',
-        models: { default: 'qwen3.6', embed: 'nomic-embed-text' },
+        models: { default: 'qwen3.6:35b-a3b-q4_K_M', embed: 'nomic-embed-text' },
         embed: {},
       },
       recording: {},

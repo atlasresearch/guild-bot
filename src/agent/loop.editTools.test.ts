@@ -31,7 +31,7 @@ vi.mock('@guildbot/guild-config', async (importOriginal) => {
     paths: () => actual.paths(TEST_GUILD_DIR),
     loadConfig: () => ({
       tools: { disabled: [], editAllowlist: currentAllowlist.value },
-      llm: { models: { default: 'qwen3.6' } },
+      llm: { models: { default: 'qwen3.6:35b-a3b-q4_K_M' } },
     }) as any,
   }
 })
@@ -44,7 +44,7 @@ const REPO_SKILLS_DIR = join(__dirname, '..', '..', 'skills')
 const noToolCalls = (content: string) => ({
   content,
   toolCalls: [],
-  model: 'qwen3.6',
+  model: 'qwen3.6:35b-a3b-q4_K_M',
   finishReason: 'stop' as const,
   dialect: 'ollama-native',
 })
@@ -52,7 +52,7 @@ const noToolCalls = (content: string) => ({
 const callTool = (name: string, args: Record<string, unknown>) => ({
   content: '',
   toolCalls: [{ id: 'call_0', name, arguments: args }],
-  model: 'qwen3.6',
+  model: 'qwen3.6:35b-a3b-q4_K_M',
   finishReason: 'tool_calls' as const,
   dialect: 'ollama-native',
 })
@@ -88,7 +88,7 @@ describe('agent loop + edit tools', () => {
       userMessage: 'Update memory.md to add (eng) after Bob',
       conversationHistory: [],
       context: {},
-      model: 'qwen3.6',
+      model: 'qwen3.6:35b-a3b-q4_K_M',
       toolsDir: REPO_TOOLS_DIR,
       skillsDir: REPO_SKILLS_DIR,
     })
@@ -118,7 +118,7 @@ describe('agent loop + edit tools', () => {
       userMessage: 'Change ship v1 to ship v2',
       conversationHistory: [],
       context: {},
-      model: 'qwen3.6',
+      model: 'qwen3.6:35b-a3b-q4_K_M',
       toolsDir: REPO_TOOLS_DIR,
       skillsDir: REPO_SKILLS_DIR,
     })
@@ -143,7 +143,7 @@ describe('agent loop + edit tools', () => {
       userMessage: 'Replace memory.md',
       conversationHistory: [],
       context: {},
-      model: 'qwen3.6',
+      model: 'qwen3.6:35b-a3b-q4_K_M',
       toolsDir: REPO_TOOLS_DIR,
       skillsDir: REPO_SKILLS_DIR,
     })
@@ -166,7 +166,7 @@ describe('agent loop + edit tools', () => {
       userMessage: 'try to edit',
       conversationHistory: [],
       context: {},
-      model: 'qwen3.6',
+      model: 'qwen3.6:35b-a3b-q4_K_M',
       toolsDir: REPO_TOOLS_DIR,
       skillsDir: REPO_SKILLS_DIR,
     })
@@ -182,7 +182,7 @@ describe('agent loop + edit tools', () => {
       userMessage: 'hello',
       conversationHistory: [],
       context: {},
-      model: 'qwen3.6',
+      model: 'qwen3.6:35b-a3b-q4_K_M',
       toolsDir: REPO_TOOLS_DIR,
       skillsDir: REPO_SKILLS_DIR,
     })

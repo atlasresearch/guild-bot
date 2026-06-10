@@ -11,7 +11,7 @@ const VALID_CONFIG = {
   llm: {
     provider: 'ollama',
     baseUrl: 'http://localhost:11434/v1',
-    models: { default: 'qwen3.6', embed: 'nomic-embed-text' },
+    models: { default: 'qwen3.6:35b-a3b-q4_K_M', embed: 'nomic-embed-text' },
     embed: {},
   },
   recording: {},
@@ -65,7 +65,7 @@ describe('loadConfig', () => {
     writeConfig(guildDir, VALID_CONFIG)
     writeSecrets(guildDir, { 'discord.token': 'fake' })
     const first = loadConfig(guildDir)
-    expect(first.llm.models.default).toBe('qwen3.6')
+    expect(first.llm.models.default).toBe('qwen3.6:35b-a3b-q4_K_M')
 
     writeConfig(guildDir, {
       ...VALID_CONFIG,
