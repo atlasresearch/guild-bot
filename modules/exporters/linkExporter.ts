@@ -1,6 +1,6 @@
+import { atomicWrite } from '@guildbot/interfaces'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import { atomicWrite } from '@guildbot/interfaces'
 
 export type LinkKind = 'content' | 'embed' | 'attachment'
 
@@ -13,7 +13,8 @@ export interface ExtractedLink {
 export interface LinkSource {
   content?: string | null
   embeds?: Iterable<{ url?: string | null }>
-  attachments?: Iterable<{ url?: string | null }>
+  /** A list, or a discord.js Collection (a Map keyed by attachment id), as a Message carries them. */
+  attachments?: Iterable<{ url?: string | null }> | ReadonlyMap<string, { url?: string | null }>
 }
 
 export interface LinkRow {
@@ -94,7 +95,9 @@ export function extractLinks(source: LinkSource): ExtractedLink[] {
   const found: ExtractedLink[] = []
   for (const url of extractUrlsFromText(source.content ?? '')) found.push({ url, kind: 'content' })
   for (const e of source.embeds ?? []) if (e.url) found.push({ url: e.url, kind: 'embed' })
-  for (const a of source.attachments ?? []) if (a.url) found.push({ url: a.url, kind: 'attachment' })
+  const attachments = source.attachments instanceof Map ? source.attachments.values() : (source.attachments ?? [])
+  for (const a of attachments as Iterable<{ url?: string | null }>)
+    if (a.url) found.push({ url: a.url, kind: 'attachment' })
 
   const seen = new Set<string>()
   return found.filter((l) => {

@@ -103,9 +103,9 @@ describe('extractLinks', () => {
     ])
   })
 
-  it('accepts Map values as attachments (discord.js Collection)', () => {
+  it('reads attachments from a discord.js Collection (a Map keyed by id), as a Message carries them', () => {
     const attachments = new Map([['1', { url: 'https://cdn.example/a.txt' }]])
-    expect(extractLinks({ content: null, attachments: attachments.values() })).toEqual([
+    expect(extractLinks({ content: null, attachments })).toEqual([
       { url: 'https://cdn.example/a.txt', kind: 'attachment' }
     ])
   })
