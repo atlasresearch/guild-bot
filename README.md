@@ -56,6 +56,13 @@ Set `discord.alwaysRecordingChannelId` in the guild's `config.json` to auto-star
 | `thread <list\|show\|new\|fork\|chat>` | Manage and chat in per-guild threads stored on disk |
 | `prompt <show\|set\|history\|revert\|diff\|bump>` | Manage the guild's system prompt |
 | `memory <show\|set\|history\|revert\|forget\|diff>` | Manage the guild's long-term memory |
+| `links [--guild-dir <dir>] [--out <file>]` | Export every link ever posted in the guild (all channels and threads, full history) |
+
+```sh
+pnpm tsx src/cli.ts links --guild-dir ~/.guildbot/myguild --out links.json
+```
+
+`links` writes CSV by default (`<guild-dir>/exports/links-<YYYY-MM-DD>.csv`), or a JSON array when `--out` ends in `.json`. One row per link, oldest first, with columns `url`, `kind` (`content`\|`embed`\|`attachment`), `guildId`, `channelId`, `channelName`, `parentChannelName`, `messageId`, `messageUrl`, `authorId`, `authorName`, `timestamp`. Channels and threads the bot can't read are skipped and listed in the summary.
 
 ## Architecture
 
@@ -81,7 +88,7 @@ modules/            — internal pnpm workspace packages
   recording         — @discordjs/voice capture + WebSocket transcription server (@guildbot/recording)
   message-processor — syncs Discord messages to the vector store (@guildbot/message-processor)
   rag               — vector search + LLM Q&A (@guildbot/rag)
-  exporters         — Mermaid and RDF diagram exporters (@guildbot/exporters)
+  exporters         — Mermaid and RDF diagram exporters, link extraction + CSV/JSON link export (@guildbot/exporters)
   interfaces        — ffmpeg/whisper wrappers, atomic file writes (@guildbot/interfaces)
   types             — shared TypeScript types (@guildbot/types)
 ```

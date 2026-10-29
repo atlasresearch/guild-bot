@@ -14,6 +14,7 @@ import { buildMermaid, exportMermaid } from '@guildbot/exporters'
 import { initGuildDir, syncFromCodebase } from '@guildbot/guild-config'
 import { loadToolHandler } from './tools/discover'
 import { cmdThread } from './cli-thread'
+import { cmdLinks } from './cli-links'
 import { cmdPrompt, cmdMemory } from './cli-prompt-memory'
 
 const CODEBASE_ROOT = path.join(import.meta.dirname, '..')
@@ -205,6 +206,7 @@ async function main(argv: string[]) {
     else if (cmd === 'thread') await cmdThread(argv.slice(1))
     else if (cmd === 'prompt') await cmdPrompt(argv.slice(1))
     else if (cmd === 'memory') await cmdMemory(argv.slice(1))
+    else if (cmd === 'links') await cmdLinks(argv.slice(1))
     else {
       console.log('Usage: guildbot <command> [args]')
       console.log('Commands:')
@@ -217,6 +219,7 @@ async function main(argv: string[]) {
       console.log('  thread     <list|show|new|fork|chat> [args]')
       console.log('  prompt     <show|set|history|revert|diff|bump>')
       console.log('  memory     <show|set|history|revert|forget|diff>')
+      console.log('  links      [--guild-dir <dir>] [--out <file.csv|file.json>] — export every link in the guild')
       process.exit(1)
     }
   } catch (err: any) {
